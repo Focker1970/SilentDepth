@@ -134,6 +134,9 @@ const typeSelectNode = document.getElementById("periscope-type-select");
 const periscopeLeftButton = document.getElementById("periscope-left");
 const periscopeCenterButton = document.getElementById("periscope-center");
 const periscopeRightButton = document.getElementById("periscope-right");
+const opticsZoomWideButton = document.getElementById("optics-zoom-wide");
+const opticsZoomStandardButton = document.getElementById("optics-zoom-standard");
+const opticsZoomZoomButton = document.getElementById("optics-zoom-zoom");
 const opticsTurnControlsNode = document.getElementById("optics-turn-controls");
 const periscopeTypeRowNode = document.getElementById("periscope-type-row");
 const periscopeReticleRowNode = document.getElementById("periscope-reticle-row");
@@ -746,6 +749,8 @@ const state = {
     focusContactId: null,
     lastFocusContactId: null,
     bearingOffset: 0,
+    periscopeZoom: 1,
+    binocularZoom: 1,
     suspectedType: null,
     lastMeasuredRange: null,
     apparentReading: null,
@@ -1383,6 +1388,40 @@ function propulsionModeLabel(sub = state.submarine) {
 
 function currentPeriscopeBearing() {
   return normalizeAngle(state.submarine.heading + state.periscopeControl.bearingOffset);
+}
+
+function currentOpticsZoom() {
+  if (state.viewMode === "periscope") return state.periscopeControl.periscopeZoom || 1;
+  if (state.viewMode === "binocular") return state.periscopeControl.binocularZoom || 1;
+  return 1;
+}
+
+function opticsZoomLabel() {
+  const zoom = currentOpticsZoom();
+  if (zoom <= 0.95) return "広角";
+  if (zoom >= 1.8) return "高倍率";
+  return "標準";
+}
+
+function setOpticsZoom(mode) {
+  if (state.viewMode !== "periscope" && state.viewMode !== "binocular") {
+    setStatus("潜望鏡または双眼鏡モードでのみ倍率変更できる。", "warning");
+    return;
+  }
+  const zoomValue =
+    mode === "wide"
+      ? 0.78
+      : mode === "zoom"
+        ? 2
+        : 1;
+  if (state.viewMode === "periscope") {
+    state.periscopeControl.periscopeZoom = zoomValue;
+  } else {
+    state.periscopeControl.binocularZoom = zoomValue;
+  }
+  updateButtons();
+  updatePeriscopeControl();
+  setStatus(`${state.viewMode === "periscope" ? "潜望鏡" : "双眼鏡"}倍率を ${opticsZoomLabel()} に変更。`, "good");
 }
 
 function loadedTubeCount(sub = state.submarine) {
@@ -3464,6 +3503,10 @@ function updateButtons() {
       ? describeVoiceMode()
       : "独語復唱は停止中。ヘッダーの ON/OFF で再開。";
   }
+  const zoomLabel = opticsZoomLabel();
+  setButtonState(opticsZoomWideButton, "active", zoomLabel === "広角");
+  setButtonState(opticsZoomStandardButton, "active", zoomLabel === "標準");
+  setButtonState(opticsZoomZoomButton, "active", zoomLabel === "高倍率");
   if (captainBinocularButton) {
     captainBinocularButton.textContent =
       state.binocularAttackState === "allowed"
@@ -7224,10 +7267,10 @@ function updatePeriscopeControl() {
     if (periscopeGuideNode) {
       periscopeGuideNode.textContent = isBinocular
         ? focus
-          ? "Tab または艦影クリックで目標切替。双眼鏡では焦点目標の概算距離をそのまま TDC 距離同期に使える。"
+          ? `Tab または艦影クリックで目標切替。倍率 ${opticsZoomLabel()}。双眼鏡では焦点目標の概算距離をそのまま TDC 距離同期に使える。`
           : "双眼鏡で目標を捕捉すると、ここに概算距離ガイドを表示する。"
         : focus
-          ? "黄色の上線をマスト頂部へ、中央水平線を喫水線へ合わせる。幅が広いほど横腹、細いほど船首・船尾向き。"
+          ? `黄色の上線をマスト頂部へ、中央水平線を喫水線へ合わせる。倍率 ${opticsZoomLabel()}。幅が広いほど横腹、細いほど船首・船尾向き。`
           : "視界内の艦影を潜望鏡で捉えると、ここに測距ガイドを表示する。";
     }
     if (periscopeBearingNode) {
@@ -7279,7 +7322,9 @@ function getPeriscopeVisuals() {
   const sub = state.submarine;
   const stage = currentStage();
   const periscopeView = state.viewMode === "periscope";
-  const FOV = periscopeView ? (state.navigationTactical.periscopeStable ? 38 : 32) : 62;
+  const zoom = currentOpticsZoom();
+  const baseFOV = periscopeView ? (state.navigationTactical.periscopeStable ? 38 : 32) : 62;
+  const FOV = baseFOV / zoom;
   const opticsBearing = periscopeView
     ? currentPeriscopeBearing()
     : normalizeAngle(sub.heading + state.periscopeControl.bearingOffset);
@@ -7292,7 +7337,7 @@ function getPeriscopeVisuals() {
       const relB = normalizeAngle(bearing(sub, contact) - opticsBearing);
       const mastH = MAST_HEIGHT[contact.type] || 12;
       const minPixelHeight = stage.id === "training_shot" ? 8 : state.viewMode === "binocular" ? 6 : 5;
-      const pixelHeight = clamp(MAST_K * mastH / range, minPixelHeight, 170 * 1.5);
+      const pixelHeight = clamp(MAST_K * mastH * zoom / range, minPixelHeight, 170 * 1.5 * zoom);
       return {
         ...contact,
         range,
@@ -7502,7 +7547,7 @@ function drawOpticsOverlay() {
     ctx.fillText(
       `Periscope ${formatHeading(opticsBearing)} / Relative ${formatSigned(
         state.periscopeControl.bearingOffset
-      )}°`,
+      )}° / ${opticsZoomLabel()}`,
       cx - 132,
       cy + R + 28
     );
@@ -7554,7 +7599,7 @@ function drawOpticsOverlay() {
     ctx.fillText(
       `Binocular ${formatHeading(binocularBearing)} / Relative ${formatSigned(
         state.periscopeControl.bearingOffset
-      )}°`,
+      )}° / ${opticsZoomLabel()}`,
       cx - 132,
       cy + 150
     );
@@ -7712,6 +7757,9 @@ periscopeCenterButton?.addEventListener("click", () => {
   updateHud();
 });
 periscopeRightButton?.addEventListener("click", () => turnPeriscope(10));
+opticsZoomWideButton?.addEventListener("click", () => setOpticsZoom("wide"));
+opticsZoomStandardButton?.addEventListener("click", () => setOpticsZoom("standard"));
+opticsZoomZoomButton?.addEventListener("click", () => setOpticsZoom("zoom"));
 reticleDecButton?.addEventListener("click", () => {
   state.periscopeControl.reticleReading = Math.max(0.5, +(state.periscopeControl.reticleReading - 0.5).toFixed(1));
   updatePeriscopeControl();
