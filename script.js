@@ -4040,6 +4040,9 @@ function updateHud() {
   const alarmCompleted = alarmTaskCount();
   const selectedFire = selectedTorpedoFireStatus();
   const activeTube = findTubeById(state.torpedoSequence.selectedTubeId, sub);
+  const nextImpactTorpedo = [...state.torpedoesInWater]
+    .filter((torpedo) => (torpedo.interceptCountdown ?? 0) > 0)
+    .sort((a, b) => (a.interceptCountdown ?? Infinity) - (b.interceptCountdown ?? Infinity))[0] || null;
   const activeChasers = state.contacts.filter(
     (contact) => contact.hostile && !contact.destroyed && (contact.chaseModeTimer || 0) > 0
   ).length;
@@ -4125,7 +4128,9 @@ function updateHud() {
       : objective;
   hudObjectiveNode.textContent = binocularObjective.label;
   hudObjectiveNoteNode.textContent = binocularObjective.detail;
-  hudTorpedoStatusNode.textContent = selectedFire.ready
+  hudTorpedoStatusNode.textContent = nextImpactTorpedo
+    ? `Impact ${nextImpactTorpedo.interceptCountdown.toFixed(1)}s`
+    : selectedFire.ready
     ? "Fire Authorized"
     : state.torpedoSequence.tubeReady
     ? "Tube Ready"
@@ -4138,7 +4143,9 @@ function updateHud() {
           : state.alarmDive.active
             ? "Securing"
             : "Armed";
-  hudTorpedoNoteNode.textContent = state.torpedoSequence.stage === TORPEDO_SEQUENCE.preparing
+  hudTorpedoNoteNode.textContent = nextImpactTorpedo
+    ? `走行中魚雷 ${state.torpedoesInWater.length} 本 / 命中音または失走報告を待機`
+    : state.torpedoSequence.stage === TORPEDO_SEQUENCE.preparing
     ? `${state.torpedoSequence.prepMode === "surfaced" ? "浮上射法" : "潜航射法"} / ${
         tubeStatusText
       }`
