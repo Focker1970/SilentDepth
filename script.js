@@ -5494,7 +5494,7 @@ function computeTorpedoHitChance(solution, usesTDC) {
     sub.depth >= UBOAT_CLASS.torpedoDepthMin && sub.depth <= UBOAT_CLASS.torpedoDepthMax ? 1 : 0.65;
   const prepFactor = seq.outerDoorOpen ? 1 : 0.72;
   const stealthFactor = state.silentRunning ? 1.04 : 0.98;
-  return clamp(
+  const baseChance = clamp(
     solution.solutionRating *
       rangeFactor *
       gyroFactor *
@@ -5503,8 +5503,31 @@ function computeTorpedoHitChance(solution, usesTDC) {
       depthFactor *
       prepFactor *
       stealthFactor,
-    state.difficulty === "historical" ? 0.18 : 0.24,
+    0,
     0.97
+  );
+  const closeRangeBonus =
+    solution.range <= 700
+      ? 0.22
+      : solution.range <= 1000
+        ? 0.14
+        : solution.range <= 1400
+          ? 0.06
+          : 0;
+  const tdcBonus = usesTDC && solution.shotValid ? 0.12 : 0;
+  const visualBonus = solution.contact.visualDetected ? 0.05 : 0;
+  const stableShotFloor =
+    usesTDC && solution.shotValid && solution.range <= 1000
+      ? state.difficulty === "historical"
+        ? 0.72
+        : 0.8
+      : state.difficulty === "historical"
+        ? 0.22
+        : 0.28;
+  return clamp(
+    Math.max(stableShotFloor, baseChance + closeRangeBonus + tdcBonus + visualBonus),
+    state.difficulty === "historical" ? 0.22 : 0.28,
+    0.98
   );
 }
 
