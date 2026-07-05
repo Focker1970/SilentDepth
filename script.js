@@ -2625,7 +2625,7 @@ const STAGES = [
         },
         escapeZone: { x: 10800, y: 6400, radius: 320 },
         contacts: [
-          createContact("convoy", { x: 6900, y: 4250, heading: 8, speed: 2.8 })
+          createContact("convoy", { x: 4350, y: 4480, heading: 8, speed: 2.6 })
         ]
       };
     },
