@@ -3086,20 +3086,55 @@ function navigationInterceptAdvice() {
     return {
       heading: null,
       speed: null,
+      waypoint: null,
       note: "有効な接触がなく、進路提案不可。"
     };
   }
 
+  const sub = state.submarine;
   const observed = state.observedContacts.get(focusContact.id);
   const estimatedTargetHeading = observed?.estimatedHeading ?? ((Math.round(focusContact.heading / 10) * 10) % 360 + 360) % 360;
   const estimatedTargetSpeed = observed?.estimatedSpeed ?? Math.max(2, Math.round(focusContact.speed * 2) / 2);
+  const rangeToTarget = observed?.lastRange ?? distance(sub, focusContact);
   const interceptOffset =
     state.commandIntent === "evade"
       ? 150
       : state.commandIntent === "periscope"
         ? 35
         : 55;
-  const recommendedHeading = normalizeAngle(estimatedTargetHeading - interceptOffset);
+  const projectedSeconds = clamp(rangeToTarget / Math.max(1.2, estimatedTargetSpeed * WORLD_METERS_PER_SECOND_PER_KNOT) * 0.55, 120, 420);
+  const targetProjected = {
+    x: clamp(
+      focusContact.x + Math.cos(toRadians(estimatedTargetHeading)) * knotsToWorldSpeed(estimatedTargetSpeed) * projectedSeconds,
+      0,
+      WORLD.width
+    ),
+    y: clamp(
+      focusContact.y + Math.sin(toRadians(estimatedTargetHeading)) * knotsToWorldSpeed(estimatedTargetSpeed) * projectedSeconds,
+      0,
+      WORLD.height
+    )
+  };
+  const waypointRadius =
+    state.commandIntent === "evade"
+      ? clamp(rangeToTarget * 0.18, 260, 540)
+      : state.commandIntent === "periscope"
+        ? clamp(rangeToTarget * 0.2, 280, 620)
+        : clamp(rangeToTarget * 0.24, 340, 760);
+  const waypointBearing = normalizeAngle(estimatedTargetHeading - interceptOffset);
+  const waypoint = {
+    x: clamp(
+      targetProjected.x + Math.cos(toRadians(waypointBearing)) * waypointRadius,
+      0,
+      WORLD.width
+    ),
+    y: clamp(
+      targetProjected.y + Math.sin(toRadians(waypointBearing)) * waypointRadius,
+      0,
+      WORLD.height
+    )
+  };
+  const recommendedHeading = bearing(sub, waypoint);
   const recommendedSpeed =
     state.commandIntent === "evade"
       ? 3
@@ -3112,9 +3147,10 @@ function navigationInterceptAdvice() {
   return {
     heading: recommendedHeading,
     speed: recommendedSpeed,
-    note: `航海長具申: 針路 ${formatHeading(recommendedHeading)}、速力 ${recommendedSpeed.toFixed(1)}kt で前方進出。敵推定 針路 ${formatHeading(
+    waypoint,
+    note: `航海長具申: 針路 ${formatHeading(recommendedHeading)}、速力 ${recommendedSpeed.toFixed(1)}kt で進出。敵推定 針路 ${formatHeading(
       estimatedTargetHeading
-    )} / 速力 ${estimatedTargetSpeed.toFixed(1)}kt。`
+    )} / 速力 ${estimatedTargetSpeed.toFixed(1)}kt。目標進出点 ${Math.round(waypointRadius)}m 先。`
   };
 }
 
@@ -6764,7 +6800,7 @@ function navigationPlotPrediction() {
 
   const ownHeading = advice.heading ?? state.submarine.heading;
   const ownSpeed = advice.speed ?? Math.max(2, state.submarine.targetSpeed || state.submarine.speed);
-  const ownEnd = {
+  const ownEnd = advice.waypoint ?? {
     x: clamp(
       state.submarine.x + Math.cos(toRadians(ownHeading)) * knotsToWorldSpeed(ownSpeed) * ownSeconds,
       0,
