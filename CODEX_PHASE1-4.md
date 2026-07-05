@@ -632,3 +632,16 @@ firingWindow: 1400 px  ← フェーズ判定の「攻撃圏」（変更なし�
 - Marinequadrat グリッド座標系 + エニグマ電文ミッション
 - 戦略層のゲームループ（司令部通信 → 航海長が迎撃点計算）
 - Phase 1〜4 完成後に実装可否を判断
+
+---
+
+## 公開情報（2026-07-05）
+
+| 項目 | 値 |
+|------|-----|
+| GitHub | https://github.com/Focker1970/SilentDepth |
+| 公開URL | https://silentdepth.pages.dev/ |
+| ホスティング | Cloudflare Pages |
+| デプロイ | `git push origin main` で自動デプロイ |
+
+現時点の公開バージョンは Phase 0・Phase 2 P1 完了、Phase 1 P1 一部完了の状態。
