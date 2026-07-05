@@ -1,0 +1,459 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SilentDepth 開発タスク一覧</title>
+  <style>
+    :root {
+      --bg: #07131a;
+      --panel: rgba(10, 27, 37, 0.88);
+      --panel-strong: rgba(12, 34, 47, 0.96);
+      --line: rgba(122, 162, 176, 0.22);
+      --text: #dce8e8;
+      --muted: #8fa7aa;
+      --accent: #9fd0c0;
+      --accent-strong: #d8bb67;
+      --danger: #d67c62;
+      --shadow: 0 18px 40px rgba(0, 0, 0, 0.35);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      font-family: "Hiragino Sans", "Yu Gothic", sans-serif;
+      background:
+        radial-gradient(circle at top, rgba(52, 88, 103, 0.22), transparent 40%),
+        linear-gradient(180deg, #08141b 0%, #050c10 100%);
+      color: var(--text);
+      line-height: 1.7;
+    }
+
+    main {
+      width: min(1120px, calc(100% - 32px));
+      margin: 40px auto 80px;
+    }
+
+    .hero,
+    section {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 20px;
+      box-shadow: var(--shadow);
+    }
+
+    .hero {
+      padding: 32px;
+      margin-bottom: 20px;
+    }
+
+    section {
+      padding: 26px 28px;
+      margin-bottom: 18px;
+    }
+
+    h1, h2, h3 {
+      margin: 0 0 14px;
+      line-height: 1.25;
+    }
+
+    h1 {
+      font-size: clamp(2rem, 4vw, 3.1rem);
+      letter-spacing: 0.06em;
+    }
+
+    h2 {
+      font-size: 1.45rem;
+      color: var(--accent);
+      padding-bottom: 10px;
+      border-bottom: 1px solid var(--line);
+    }
+
+    h3 {
+      font-size: 1.05rem;
+      color: var(--accent-strong);
+      margin-top: 22px;
+    }
+
+    p, li {
+      color: var(--text);
+    }
+
+    .muted {
+      color: var(--muted);
+    }
+
+    .pill-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 16px;
+    }
+
+    .pill {
+      padding: 8px 12px;
+      border-radius: 999px;
+      border: 1px solid var(--line);
+      background: rgba(255, 255, 255, 0.03);
+      color: var(--accent);
+      font-size: 0.92rem;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      gap: 16px;
+    }
+
+    .card {
+      background: var(--panel-strong);
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      padding: 18px;
+    }
+
+    ul {
+      margin: 10px 0 0;
+      padding-left: 20px;
+    }
+
+    li + li {
+      margin-top: 8px;
+    }
+
+    .checklist li {
+      list-style: none;
+      margin-left: 0;
+      padding-left: 0;
+    }
+
+    .checklist li::before {
+      content: "☐ ";
+      color: var(--accent-strong);
+      margin-right: 4px;
+    }
+
+    .milestone li::before {
+      color: var(--accent);
+    }
+
+    .danger {
+      color: var(--danger);
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <section class="hero">
+      <h1>SilentDepth 開発タスク一覧</h1>
+      <p>本書は <code>GAME_SPEC.md</code> と <code>ROLE_SPEC.md</code> を、そのまま実装タスクへ分解し、開発順にチェックできる形へ落とし込んだものです。</p>
+      <div class="pill-row">
+        <span class="pill">遊べるコア戦闘ループを先に作る</span>
+        <span class="pill">雰囲気演出はコア成立後に積み増す</span>
+        <span class="pill">P1 - P2 - P3 の順に開発する</span>
+      </div>
+    </section>
+
+    <section>
+      <h2>マイルストーン</h2>
+      <ul class="checklist milestone">
+        <li>☑ M0: 役職UIと指揮系統UIが仕様に沿って安定表示される</li>
+        <li>M1: 平常時 -> 接敵 -> 潜航戦闘 -> 雷撃 -> 離脱 が1ミッションとして成立する</li>
+        <li>M2: Alarm! による急速潜航フェーズが成立する</li>
+        <li>M3: ドイツ語復唱とTTSで艦内演出が成立する</li>
+        <li>M4: 損傷、静粛潜航、爆雷回避で生残戦が成立する</li>
+        <li>M5: AIクルーとAI駆逐艦艦長でリプレイ性が成立する</li>
+        <li>M6: 戦略層を含むキャンペーン構造が成立する</li>
+      </ul>
+    </section>
+
+    <section>
+      <h2>優先度定義</h2>
+      <ul>
+        <li><code>P1</code>: 最優先。ゲームの核</li>
+        <li><code>P2</code>: 体験を深くする中核</li>
+        <li><code>P3</code>: 拡張とリプレイ性</li>
+      </ul>
+    </section>
+
+    <section>
+      <h2>Phase 0: 既存プロト整理</h2>
+      <p class="muted">目的: 現在の画面プロトを、役職仕様と指揮系統仕様に揃える</p>
+      <div class="grid">
+        <div class="card">
+          <h3>P1 タスク</h3>
+          <ul class="checklist">
+            <li>☑ <code>battlePhase</code> の暫定状態管理を追加する</li>
+            <li>☑ 役職タブ構成を主役職前提で整理する</li>
+            <li>☑ <code>Command Chain</code> を固定構造に統一する</li>
+            <li>☑ 各役職パネルに現在任務、主要操作、最新報告を表示する</li>
+            <li>☑ <code>Bridge Log</code> の文面形式を統一する</li>
+            <li>☑ <code>viewMode</code> と captain intent の表示更新を一貫させる</li>
+          </ul>
+        </div>
+        <div class="card">
+          <h3>P2 タスク</h3>
+          <ul class="checklist">
+            <li>☑ 艦長席の視界オーバーレイを微調整する</li>
+            <li>☑ 各役職パネルの情報密度に差をつける</li>
+            <li>☑ 状態表示の語彙を整理する</li>
+          </ul>
+          <h3>確認項目</h3>
+          <ul class="checklist">
+            <li>☑ 主役職4つへ切り替えた時に役割が一目で分かる</li>
+            <li>☑ 艦長命令の後に各部署の反応が追える</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h2>Phase 1: コア戦闘ループ</h2>
+      <p class="muted">目的: 索敵 -> 接敵 -> 潜航戦闘 -> 雷撃 -> 離脱 を最低限遊べる形にする</p>
+      <div class="grid">
+        <div class="card">
+          <h3>P1 タスク</h3>
+          <ul class="checklist">
+            <li>☑ <code>battlePhase</code> を <code>patrol / contact / submerged_combat / attack / egress</code> で実装する</li>
+            <li>フェーズごとの遷移条件を明示する</li>
+            <li>☑ 平常時の接触発見イベントを実装する</li>
+            <li>☑ 視認とソナーの両方で敵発見できるようにする</li>
+            <li>☑ 敵優位と自艦優位の分岐を入れる</li>
+            <li>☑ 潜航戦闘中の基本ループを作る</li>
+            <li>ソナー報告から接敵情報が更新されるようにする</li>
+            <li>☑ 航海長操作を戦術結果へ反映させる</li>
+            <li>☑ 雷撃シーケンスを段階化する</li>
+            <li>離脱フェーズへの遷移条件を実装する</li>
+            <li>最低限の戦果判定を実装する</li>
+          </ul>
+        </div>
+        <div class="card">
+          <h3>P2 タスク</h3>
+          <ul class="checklist">
+            <li>ミッション開始条件を複数パラメータで持たせる</li>
+            <li>接敵ごとに敵編成を変えられるようにする</li>
+            <li>フェーズ別のHUD文言を用意する</li>
+          </ul>
+          <h3>確認項目</h3>
+          <ul class="checklist">
+            <li>プレイヤーが詰まるフェーズがない</li>
+            <li>雷撃後に離脱判断まで要求される</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h2>Phase 2: 急速潜航フェーズ</h2>
+      <p class="muted">目的: Alarm! 発令から完全潜航までの30秒をゲームとして成立させる</p>
+      <div class="grid">
+        <div class="card">
+          <h3>P1 タスク</h3>
+          <ul class="checklist">
+            <li><code>battlePhase</code> に <code>alarm_dive</code> を追加する</li>
+            <li><code>Alarm!</code> トリガーを実装する</li>
+            <li>急速潜航専用UIを追加する</li>
+            <li>30秒タイマーを追加する</li>
+            <li>部署別タスク進行を状態として管理する</li>
+            <li>急速潜航の主要アクションを個別タスク化する</li>
+            <li>成否で被探知率、初期深度、損傷を補正する</li>
+            <li>成功時と失敗時の分岐を作る</li>
+          </ul>
+        </div>
+        <div class="card">
+          <h3>P2 タスク</h3>
+          <ul class="checklist">
+            <li>前部移動を演出と数値効果の両方で表現する</li>
+            <li>航海長操作が潜航時間へ効くようにする</li>
+            <li>機関部の遅延や故障イベントの余地を作る</li>
+          </ul>
+          <h3>確認項目</h3>
+          <ul class="checklist">
+            <li>Alarm! は通常の深度変更より明確に別物として感じられる</li>
+            <li>成否の違いがその後のプレイに残る</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h2>Phase 3: 音声復唱・艦内演出</h2>
+      <p class="muted">目的: 艦内の命令と復唱を、見えるだけでなく聞こえるものにする</p>
+      <div class="grid">
+        <div class="card">
+          <h3>P1 タスク</h3>
+          <ul class="checklist">
+            <li>ドイツ語復唱テンプレートテーブルをデータ化する</li>
+            <li>復唱イベント構造を定義する</li>
+            <li>命令イベントから復唱イベントを発火させる</li>
+            <li>UIログに原文と日本語意味を表示する</li>
+            <li>音声ON/OFF設定を追加する</li>
+            <li>テキストのみでも成立するフォールバックを用意する</li>
+          </ul>
+        </div>
+        <div class="card">
+          <h3>P2 / P3 タスク</h3>
+          <ul class="checklist">
+            <li><code>speechSynthesis</code> ベースのTTS再生を追加する</li>
+            <li>優先度キューと同一話者クールダウンを実装する</li>
+            <li>ベル、爆雷、機関音と音声のミックス方針を実装する</li>
+            <li>話者別の話速や声質の設定項目を持たせる</li>
+            <li>ブラウザごとの <code>de-DE</code> 音声差分を吸収する</li>
+            <li>音声入力による艦長命令の受け口を検討する</li>
+          </ul>
+          <h3>確認項目</h3>
+          <ul class="checklist">
+            <li>重要命令は必ず復唱される</li>
+            <li>音声を切ってもテキストだけで進行に困らない</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h2>Phase 4: 損傷・静粛潜航・回避</h2>
+      <p class="muted">目的: 雷撃後の生残戦を、独立した緊張フェーズとして成立させる</p>
+      <div class="grid">
+        <div class="card">
+          <h3>P1 タスク</h3>
+          <ul class="checklist">
+            <li>損傷部位モデルを追加する</li>
+            <li>系統損傷を分ける</li>
+            <li><code>silent_running</code> フェーズを実装する</li>
+            <li>騒音値が敵探知率に影響するようにする</li>
+            <li>爆雷攻撃イベントを実装する</li>
+            <li>回避行動の結果が被害量を左右するようにする</li>
+            <li>応急修理の優先度を持たせる</li>
+          </ul>
+        </div>
+        <div class="card">
+          <h3>P2 タスク</h3>
+          <ul class="checklist">
+            <li>艦内ノイズ要素をイベント化する</li>
+            <li>深深度と圧壊リスクを導入する</li>
+            <li>損傷が役職UIに与える制限を設計する</li>
+          </ul>
+          <h3>確認項目</h3>
+          <ul class="checklist">
+            <li>雷撃後に生還のための判断が必要になる</li>
+            <li>静粛潜航が体感として分かる</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h2>Phase 5: AIクルー / AI駆逐艦艦長</h2>
+      <p class="muted">目的: 役職間連携と敵護衛の判断に変化を持たせ、毎回違う戦闘にする</p>
+      <div class="grid">
+        <div class="card">
+          <h3>P1 タスク</h3>
+          <ul class="checklist">
+            <li>敵駆逐艦艦長AIの意思決定レイヤーを作る</li>
+            <li>捜索、護衛優先、追尾、爆雷投下、再捜索を状態化する</li>
+            <li>クルーSOPベースの半自律行動を作る</li>
+            <li>各部署が一定範囲まで自動実行するようにする</li>
+          </ul>
+        </div>
+        <div class="card">
+          <h3>P2 / P3 タスク</h3>
+          <ul class="checklist">
+            <li>敵艦長に <code>慎重</code> <code>aggressive</code> <code>執拗</code> などの性格パラメータを持たせる</li>
+            <li>副長、機関長、ソナー員から短い提案を返す仕組みを追加する</li>
+            <li>AI提案とプレイヤー介入の優先関係を整理する</li>
+            <li class="danger">生成AIは雰囲気テキストや提案補助に限定する</li>
+            <li class="danger">基幹判定はルールベースで固定する</li>
+          </ul>
+          <h3>確認項目</h3>
+          <ul class="checklist">
+            <li>AIが勝手にゲームを解きすぎない</li>
+            <li>毎回同じ手順にはならない</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h2>Phase 6: 戦略層拡張</h2>
+      <p class="muted">目的: 単発遭遇戦から、Uボート哨戒任務全体へ広げる</p>
+      <div class="grid">
+        <div class="card">
+          <h3>P2 タスク</h3>
+          <ul class="checklist">
+            <li>戦果管理をミッション外へ持ち出す</li>
+            <li>補給、燃料、魚雷残数、修理状態を管理する</li>
+            <li>帰投や再出撃の流れを作る</li>
+          </ul>
+        </div>
+        <div class="card">
+          <h3>P3 タスク</h3>
+          <ul class="checklist">
+            <li>通信士による会敵報告や司令部応答を実装する</li>
+            <li>群狼作戦イベントを実装する</li>
+            <li>複数ミッションをまたぐキャンペーン進行を設計する</li>
+          </ul>
+          <h3>確認項目</h3>
+          <ul class="checklist">
+            <li>1回の戦闘の結果が次回以降へ意味を持つ</li>
+            <li>単発プレイでも長期プレイでも成立する</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h2>実装順チェックリスト</h2>
+      <div class="grid">
+        <div class="card">
+          <h3>先にやる順</h3>
+          <ul class="checklist">
+            <li>1. Phase 0 の P1 を完了する</li>
+            <li>2. Phase 1 の P1 を完了する</li>
+            <li>3. Phase 2 の P1 を完了する</li>
+            <li>4. Phase 3 の P1 を完了する</li>
+            <li>5. Phase 4 の P1 を完了する</li>
+            <li>6. Phase 1 から Phase 4 の P2 を順に追加する</li>
+            <li>7. Phase 5 の P1 を追加する</li>
+            <li>8. Phase 6 の P2/P3 を追加する</li>
+          </ul>
+        </div>
+        <div class="card">
+          <h3>実装の節目</h3>
+          <ul class="checklist">
+            <li>節目A: コア戦闘ループが通る</li>
+            <li>節目B: 急速潜航が通る</li>
+            <li>節目C: 復唱とTTSが通る</li>
+            <li>節目D: 爆雷回避が通る</li>
+            <li>節目E: AI駆逐艦が通る</li>
+            <li>節目F: キャンペーンへ接続できる</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h2>現時点の推奨着手順</h2>
+      <ol>
+        <li><code>battlePhase</code> の本実装</li>
+        <li>接敵イベントとフェーズ遷移</li>
+        <li><code>Alarm!</code> 専用フェーズ</li>
+        <li>雷撃手順の段階化</li>
+        <li>損傷と静粛潜航</li>
+        <li>ドイツ語復唱とTTS</li>
+        <li>AIクルー / AI駆逐艦</li>
+        <li>戦略層</li>
+      </ol>
+      <h3>次の実装候補</h3>
+      <ul class="checklist">
+        <li>☑ Phase 1-1: <code>battlePhase</code> を <code>script.js</code> に導入する</li>
+        <li>☑ Phase 1-2: 接敵トリガーとフェーズ表示を HUD に追加する</li>
+        <li>Phase 2-1: <code>Alarm!</code> タイマーと部署タスクUIを追加する</li>
+        <li>Phase 3-1: ドイツ語復唱テンプレートのデータ定義を追加する</li>
+      </ul>
+    </section>
+  </main>
+</body>
+</html>

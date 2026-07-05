@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>SilentDepth ドイツ語セリフテンプレート拡張版</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        --bg-top: #05131d;
+        --bg-bottom: #102b3c;
+        --panel: rgba(7, 21, 31, 0.84);
+        --panel-border: rgba(139, 220, 241, 0.16);
+        --text: #edf8fb;
+        --muted: #a8c0cb;
+        --accent: #dffbff;
+        --accent-soft: #8bdcf1;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        min-height: 100vh;
+        font-family: "Avenir Next", "Hiragino Sans", sans-serif;
+        color: var(--text);
+        background:
+          radial-gradient(circle at top, rgba(139, 220, 241, 0.14), transparent 26%),
+          linear-gradient(180deg, var(--bg-bottom), var(--bg-top));
+      }
+      main { max-width: 1240px; margin: 0 auto; padding: 24px; }
+      .hero, .section {
+        border: 1px solid var(--panel-border);
+        border-radius: 28px;
+        background: var(--panel);
+        padding: 24px;
+        box-shadow: 0 24px 70px rgba(0, 0, 0, 0.28);
+      }
+      .stack { display: grid; gap: 20px; margin-top: 20px; }
+      .eyebrow { margin: 0 0 10px; color: var(--accent-soft); text-transform: uppercase; letter-spacing: 0.18em; }
+      h1, h2, h3, p { margin-top: 0; }
+      h1 { font-size: clamp(2.2rem, 7vw, 4rem); line-height: 0.96; }
+      h2 { font-size: 1.5rem; margin-bottom: 14px; }
+      h3 { color: var(--accent); margin-bottom: 10px; }
+      p, li { color: var(--muted); line-height: 1.8; }
+      code { padding: 2px 6px; border-radius: 8px; background: rgba(255,255,255,0.08); color: var(--text); }
+      table { width: 100%; border-collapse: collapse; background: rgba(255,255,255,0.03); border-radius: 18px; overflow: hidden; }
+      th, td { padding: 12px 14px; text-align: left; vertical-align: top; border-bottom: 1px solid rgba(255,255,255,0.06); }
+      th { color: var(--accent); background: rgba(139,220,241,0.08); }
+      tr:last-child td { border-bottom: 0; }
+      .table-wrap { overflow-x: auto; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <section class="hero">
+        <p class="eyebrow">Expanded German Voice Templates</p>
+        <h1>ドイツ語セリフテンプレート拡張版</h1>
+        <p>収録・実装にそのまま回せるように、役職、用途、ドイツ語文、意図を整理した拡張テンプレート集。</p>
+      </section>
+      <div class="stack">
+        <section class="section">
+          <h2>機関・推進</h2>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>役職</th><th>用途</th><th>ドイツ語</th><th>意図</th></tr></thead>
+              <tbody>
+                <tr><td>艦長</td><td>停止命令</td><td><code>Maschinen stopp!</code></td><td>機関停止</td></tr>
+                <tr><td>機関</td><td>復唱</td><td><code>Maschinen stopp, jawohl!</code></td><td>了解</td></tr>
+                <tr><td>機関</td><td>完了報告</td><td><code>Maschinen gestoppt!</code></td><td>停止完了</td></tr>
+                <tr><td>艦長</td><td>微速前進</td><td><code>Langsame Fahrt voraus!</code></td><td>微速前進</td></tr>
+                <tr><td>艦長</td><td>半速前進</td><td><code>Halbe Fahrt voraus!</code></td><td>半速前進</td></tr>
+                <tr><td>艦長</td><td>全速前進</td><td><code>Äußerste Fahrt voraus!</code></td><td>全速前進</td></tr>
+                <tr><td>機関</td><td>電動機報告</td><td><code>E-Maschinen laufen!</code></td><td>電動機運転中</td></tr>
+                <tr><td>機関</td><td>ディーゼル報告</td><td><code>Diesel laufen!</code></td><td>ディーゼル運転中</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+        <section class="section">
+          <h2>深度・潜航</h2>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>役職</th><th>用途</th><th>ドイツ語</th><th>意図</th></tr></thead>
+              <tbody>
+                <tr><td>艦長</td><td>20m 命令</td><td><code>Tauchen auf zwanzig Meter!</code></td><td>20m へ潜航</td></tr>
+                <tr><td>艦長</td><td>60m 命令</td><td><code>Tauchen auf sechzig Meter!</code></td><td>60m へ潜航</td></tr>
+                <tr><td>艦長</td><td>120m 命令</td><td><code>Tauchen auf einhundertzwanzig Meter!</code></td><td>120m へ潜航</td></tr>
+                <tr><td>艦長</td><td>140m 命令</td><td><code>Tauchen auf einhundertvierzig Meter!</code></td><td>140m へ潜航</td></tr>
+                <tr><td>操舵</td><td>復唱</td><td><code>Einhundertzwanzig Meter, jawohl!</code></td><td>120m 了解</td></tr>
+                <tr><td>操舵</td><td>到達報告</td><td><code>Tiefe erreicht!</code></td><td>指定深度到達</td></tr>
+                <tr><td>操舵</td><td>120m 到達</td><td><code>Tiefe einhundertzwanzig Meter erreicht!</code></td><td>120m 到達</td></tr>
+                <tr><td>艦長</td><td>潜望鏡深度維持</td><td><code>Periskoptiefe halten!</code></td><td>潜望鏡深度維持</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+        <section class="section">
+          <h2>操舵・針路</h2>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>役職</th><th>用途</th><th>ドイツ語</th><th>意図</th></tr></thead>
+              <tbody>
+                <tr><td>艦長</td><td>右舵一杯</td><td><code>Ruder hart Steuerbord!</code></td><td>右舵一杯</td></tr>
+                <tr><td>艦長</td><td>左舵一杯</td><td><code>Ruder hart Backbord!</code></td><td>左舵一杯</td></tr>
+                <tr><td>操舵</td><td>復唱</td><td><code>Hart Steuerbord, jawohl!</code></td><td>了解</td></tr>
+                <tr><td>操舵</td><td>針路保持</td><td><code>Neuen Kurs halten!</code></td><td>新針路保持</td></tr>
+                <tr><td>操舵</td><td>報告</td><td><code>Neuer Kurs liegt an!</code></td><td>新針路に乗った</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+        <section class="section">
+          <h2>潜望鏡・見張り・ソナー</h2>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>役職</th><th>用途</th><th>ドイツ語</th><th>意図</th></tr></thead>
+              <tbody>
+                <tr><td>艦長</td><td>潜望鏡上げ</td><td><code>Periskop hoch!</code></td><td>潜望鏡上げ</td></tr>
+                <tr><td>艦長</td><td>潜望鏡下げ</td><td><code>Periskop runter!</code></td><td>潜望鏡下げ</td></tr>
+                <tr><td>見張り</td><td>目標視認</td><td><code>Ziel in Sicht!</code></td><td>目標視認</td></tr>
+                <tr><td>見張り</td><td>駆逐艦視認</td><td><code>Zerstörer an Backbord!</code></td><td>左舷に駆逐艦</td></tr>
+                <tr><td>見張り</td><td>商船視認</td><td><code>Dampfer voraus!</code></td><td>前方に商船</td></tr>
+                <tr><td>ソナー</td><td>前方接触</td><td><code>Schraubengeräusch voraus!</code></td><td>前方にスクリュー音</td></tr>
+                <tr><td>ソナー</td><td>右舷接触</td><td><code>Schraubengeräusch Steuerbord!</code></td><td>右舷にスクリュー音</td></tr>
+                <tr><td>ソナー</td><td>接触喪失</td><td><code>Kontakt verloren!</code></td><td>接触喪失</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+        <section class="section">
+          <h2>雷撃・損害</h2>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>役職</th><th>用途</th><th>ドイツ語</th><th>意図</th></tr></thead>
+              <tbody>
+                <tr><td>艦長</td><td>発射管準備命令</td><td><code>Rohr eins vorbereiten!</code></td><td>一番発射管準備</td></tr>
+                <tr><td>雷撃</td><td>準備完了</td><td><code>Rohr eins klar zum Schuss!</code></td><td>発射準備完了</td></tr>
+                <tr><td>雷撃</td><td>入力完了</td><td><code>Daten eingegeben!</code></td><td>諸元入力完了</td></tr>
+                <tr><td>雷撃</td><td>解成立</td><td><code>Lösung steht!</code></td><td>解あり</td></tr>
+                <tr><td>艦長</td><td>発射命令</td><td><code>Los!</code></td><td>撃て</td></tr>
+                <tr><td>雷撃</td><td>命中</td><td><code>Treffer!</code></td><td>命中</td></tr>
+                <tr><td>雷撃</td><td>外れ</td><td><code>Daneben!</code></td><td>外れ</td></tr>
+                <tr><td>損害報告</td><td>浸水</td><td><code>Wassereinbruch!</code></td><td>浸水</td></tr>
+                <tr><td>損害報告</td><td>機関損傷</td><td><code>Maschinenschaden!</code></td><td>機関損傷</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+      </div>
+    </main>
+  </body>
+</html>

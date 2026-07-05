@@ -1,0 +1,436 @@
+<!DOCTYPE html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>SilentDepth 全体ゲーム仕様</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        --bg-top: #05131d;
+        --bg-bottom: #102b3c;
+        --panel: rgba(7, 21, 31, 0.84);
+        --panel-border: rgba(139, 220, 241, 0.16);
+        --text: #edf8fb;
+        --muted: #a8c0cb;
+        --accent: #dffbff;
+        --accent-soft: #8bdcf1;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        min-height: 100vh;
+        font-family: "Avenir Next", "Hiragino Sans", sans-serif;
+        color: var(--text);
+        background:
+          radial-gradient(circle at top, rgba(139, 220, 241, 0.14), transparent 26%),
+          linear-gradient(180deg, var(--bg-bottom), var(--bg-top));
+      }
+      body::before {
+        content: "";
+        position: fixed;
+        inset: 0;
+        background-image:
+          linear-gradient(rgba(255, 255, 255, 0.03) 1px, transparent 1px),
+          linear-gradient(90deg, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
+        background-size: 42px 42px;
+        opacity: 0.16;
+        pointer-events: none;
+      }
+      main {
+        position: relative;
+        z-index: 1;
+        max-width: 1320px;
+        margin: 0 auto;
+        padding: 24px;
+      }
+      .hero, .section {
+        border: 1px solid var(--panel-border);
+        border-radius: 28px;
+        background: var(--panel);
+        backdrop-filter: blur(12px);
+        box-shadow: 0 24px 70px rgba(0, 0, 0, 0.28);
+      }
+      .hero { padding: 30px; }
+      .section { padding: 24px; }
+      .stack { display: grid; gap: 20px; margin-top: 20px; }
+      .eyebrow {
+        margin: 0 0 10px;
+        color: var(--accent-soft);
+        text-transform: uppercase;
+        letter-spacing: 0.18em;
+      }
+      h1, h2, h3, p { margin-top: 0; }
+      h1 { margin-bottom: 12px; font-size: clamp(2.6rem, 8vw, 4.6rem); line-height: 0.96; }
+      h2 { margin-bottom: 14px; font-size: 1.6rem; }
+      h3 { margin-bottom: 10px; font-size: 1.12rem; color: var(--accent); }
+      p, li { line-height: 1.8; color: var(--muted); }
+      ul, ol { margin: 0; padding-left: 22px; }
+      li + li { margin-top: 6px; }
+      code {
+        padding: 2px 6px;
+        border-radius: 8px;
+        background: rgba(255, 255, 255, 0.08);
+        color: var(--text);
+        font-family: "SFMono-Regular", Consolas, monospace;
+      }
+      .pill {
+        display: inline-block;
+        margin-top: 10px;
+        padding: 8px 12px;
+        border-radius: 999px;
+        background: rgba(139, 220, 241, 0.12);
+        color: var(--accent);
+      }
+      .grid { display: grid; gap: 16px; }
+      .grid.two { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .card {
+        padding: 18px;
+        border-radius: 20px;
+        background: rgba(255, 255, 255, 0.04);
+        border: 1px solid rgba(255, 255, 255, 0.05);
+      }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-top: 12px;
+        overflow: hidden;
+        border-radius: 18px;
+        background: rgba(255, 255, 255, 0.03);
+      }
+      th, td {
+        padding: 12px 14px;
+        text-align: left;
+        vertical-align: top;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+      }
+      th {
+        color: var(--accent);
+        background: rgba(139, 220, 241, 0.08);
+        font-weight: 700;
+      }
+      tr:last-child td { border-bottom: 0; }
+      .table-wrap { overflow-x: auto; }
+      @media (max-width: 900px) {
+        .grid.two { grid-template-columns: 1fr; }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <section class="hero">
+        <p class="eyebrow">SilentDepth Game Specification</p>
+        <h1>SilentDepth 全体ゲーム仕様</h1>
+        <p>
+          第二次世界大戦の北大西洋における Uボートのコンボイ戦を題材にした、役職切替型の戦術シミュレーションゲーム全体設計。
+          目的、ゲーム中タイムライン、フェーズ遷移、AI利用方針、実装計画までをまとめる。
+        </p>
+        <div class="pill">対象: Uボート / 北大西洋 / コンボイ戦 / 急速潜航 / 潜航戦闘 / 雷撃 / 離脱</div>
+      </section>
+
+      <div class="stack">
+        <section class="section">
+          <h2>概要</h2>
+          <p><code>SilentDepth</code> は、第二次世界大戦の北大西洋における Uボートによる連合軍コンボイ戦を題材にした、役職切替型の戦術シミュレーションゲームである。</p>
+          <p>プレイヤーは単なる「潜水艦そのもの」ではなく、Uボート艦内の複数役職を切り替えながら、艦長として全体を指揮する。</p>
+          <ol>
+            <li><code>指揮系統と部署連携</code></li>
+            <li><code>索敵 -> 接敵 -> 急速潜航 -> 潜航戦闘 -> 雷撃 -> 離脱</code> の緊張ある流れ</li>
+            <li><code>情報不足の中での判断</code></li>
+          </ol>
+        </section>
+
+        <section class="section">
+          <h2>ゲームの目的</h2>
+          <div class="grid two">
+            <article class="card">
+              <h3>プレイヤー目標</h3>
+              <ul>
+                <li>北大西洋で連合軍コンボイを追跡する</li>
+                <li>護衛駆逐艦に捕まる前に、重要輸送船・商船へ有効打を与える</li>
+                <li>爆雷攻撃を生き延び、艦と乗組員を保ったまま離脱する</li>
+              </ul>
+            </article>
+            <article class="card">
+              <h3>勝利 / 敗北</h3>
+              <ul>
+                <li>勝利: 主要目標撃沈または戦果条件達成後、離脱海域へ到達</li>
+                <li>敗北: 圧壊、浸水、機関不能、急速潜航失敗、任務継続不能</li>
+                <li>評価: 撃沈総トン数、損傷率、被探知回数、命中率、乗組員状態</li>
+              </ul>
+            </article>
+          </div>
+        </section>
+
+        <section class="section">
+          <h2>コア体験</h2>
+          <div class="grid two">
+            <article class="card">
+              <h3>感じるべきこと</h3>
+              <ul>
+                <li>艦長として命令を出す緊張感</li>
+                <li>各部署の報告を統合して判断する感覚</li>
+                <li>ソナーだけを頼りに敵を追う不安</li>
+                <li>雷撃解が成立した瞬間の快感</li>
+                <li>爆雷回避中の静寂と圧迫感</li>
+              </ul>
+            </article>
+            <article class="card">
+              <h3>デザイン主軸</h3>
+              <p><code>自律型AIクルー + 手動介入型戦術シミュレーション</code></p>
+              <ul>
+                <li>平常時は各部署が半自律で動く</li>
+                <li>プレイヤーは命令と優先順位を決める</li>
+                <li>緊急時や決定的局面のみ、直接役職切替して介入する</li>
+                <li>雷撃だけは比較的ハードコアな演算と手順を要求する</li>
+              </ul>
+            </article>
+          </div>
+        </section>
+
+        <section class="section">
+          <h2>プレイヤー役職</h2>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr><th>役職</th><th>主な仕事</th><th>ゲーム上の役割</th></tr>
+              </thead>
+              <tbody>
+                <tr><td>艦長</td><td>命令、観測、戦術判断、雷撃許可、急速潜航発令</td><td>全体判断の中心</td></tr>
+                <tr><td>ソナー員</td><td>受動聴音、能動ソナー、接触分類、方位報告</td><td>外界情報の中心</td></tr>
+                <tr><td>雷撃士</td><td>TDC入力、進角計算、発射管準備、発射</td><td>攻撃の中心</td></tr>
+                <tr><td>航海長</td><td>深度、針路、速力、トリム、離脱コース</td><td>艦姿勢維持と操艦の中心</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <section class="section">
+          <h2>ゲーム中のタイムライン</h2>
+          <ol>
+            <li>平常時</li>
+            <li>索敵</li>
+            <li>敵艦発見</li>
+            <li>戦闘配備</li>
+            <li>急速潜航または接敵継続</li>
+            <li>潜航戦闘</li>
+            <li>雷撃</li>
+            <li>回避 / 静粛潜航</li>
+            <li>離脱</li>
+            <li>戦果判定</li>
+          </ol>
+        </section>
+
+        <section class="section">
+          <h2>フェーズ詳細</h2>
+          <div class="grid two">
+            <article class="card">
+              <h3>1. 平常時</h3>
+              <p>浮上中または通常航行中。見張り、哨戒、充電、補機管理が中心。</p>
+              <ul>
+                <li>速力変更、針路変更、深度指示</li>
+                <li>双眼鏡監視、潜望鏡深度移行</li>
+                <li>AIクルーSOPの調整</li>
+              </ul>
+            </article>
+            <article class="card">
+              <h3>2. 索敵</h3>
+              <p>コンボイを捜索する段階。艦長とソナー員が主役。</p>
+              <ul>
+                <li>どの深度で進むか</li>
+                <li>どれだけ静かに近づくか</li>
+                <li>能動ソナーを使うか</li>
+                <li>夜間水上接近を狙うか</li>
+              </ul>
+            </article>
+            <article class="card">
+              <h3>3. 敵艦発見</h3>
+              <p>視認または聴音で接触を得る局面。</p>
+              <ul>
+                <li>プレイヤー優位なら戦闘配備へ</li>
+                <li>敵優位なら <code>Alarm!</code> による急速潜航へ</li>
+              </ul>
+            </article>
+            <article class="card">
+              <h3>4. 戦闘配備</h3>
+              <p>平常時から戦闘シフトへ移る準備段階。</p>
+              <ul>
+                <li>艦長: 交戦方針決定</li>
+                <li>ソナー員: 方位追跡強化</li>
+                <li>雷撃士: TDCと発射管準備</li>
+                <li>航海長: 射点接近コース調整</li>
+              </ul>
+            </article>
+            <article class="card">
+              <h3>5. 急速潜航</h3>
+              <p>30秒前後の高密度手動フェーズ。</p>
+              <ul>
+                <li>ハッチ閉鎖</li>
+                <li>ディーゼル停止</li>
+                <li>モーター切替</li>
+                <li>バラスト注水</li>
+                <li>最大下げ角</li>
+                <li>潜航完了</li>
+              </ul>
+            </article>
+            <article class="card">
+              <h3>6. 潜航戦闘</h3>
+              <p>潜航後の主戦闘フェーズ。ソナー主導で外界を把握する。</p>
+              <ul>
+                <li>ソナー報告</li>
+                <li>艦長判断</li>
+                <li>航海長の針路・深度維持</li>
+                <li>雷撃士の解構築</li>
+              </ul>
+            </article>
+            <article class="card">
+              <h3>7. 雷撃</h3>
+              <p>攻撃のクライマックス。</p>
+              <ul>
+                <li>標的選定</li>
+                <li>距離・速度・AOB入力</li>
+                <li>信管 / 深度 / 速度設定</li>
+                <li>注水、同期、発射</li>
+              </ul>
+            </article>
+            <article class="card">
+              <h3>8. 回避 / 静粛潜航</h3>
+              <p>雷撃後または敵探知後の生残フェーズ。</p>
+              <ul>
+                <li>静粛潜航</li>
+                <li>深深度への移行</li>
+                <li>低速回避</li>
+                <li>損傷制御</li>
+              </ul>
+            </article>
+            <article class="card">
+              <h3>9. 離脱</h3>
+              <p>雷撃成功後に生還を目指す。</p>
+              <ul>
+                <li>離脱針路維持</li>
+                <li>護衛艦との距離確保</li>
+                <li>バッテリー / 損傷 / 深度管理</li>
+              </ul>
+            </article>
+            <article class="card">
+              <h3>10. 戦果判定</h3>
+              <ul>
+                <li>撃沈トン数</li>
+                <li>重要輸送船撃沈の有無</li>
+                <li>生還</li>
+                <li>被害</li>
+                <li>魚雷消費効率</li>
+              </ul>
+            </article>
+          </div>
+        </section>
+
+        <section class="section">
+          <h2>ゲームループまとめ</h2>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr><th>フェーズ</th><th>プレイヤー負荷</th><th>主役職</th><th>主な感情</th></tr>
+              </thead>
+              <tbody>
+                <tr><td>平常時</td><td>低</td><td>艦長、航海長</td><td>監視、準備</td></tr>
+                <tr><td>索敵</td><td>中</td><td>艦長、ソナー員</td><td>緊張、探索</td></tr>
+                <tr><td>敵艦発見</td><td>高</td><td>艦長</td><td>判断、焦り</td></tr>
+                <tr><td>戦闘配備</td><td>中</td><td>全役職</td><td>集中</td></tr>
+                <tr><td>急速潜航</td><td>非常に高</td><td>全役職</td><td>パニック、即応</td></tr>
+                <tr><td>潜航戦闘</td><td>高</td><td>ソナー員、艦長、航海長</td><td>不安、計画</td></tr>
+                <tr><td>雷撃</td><td>非常に高</td><td>雷撃士、艦長</td><td>計算、決断</td></tr>
+                <tr><td>回避</td><td>高</td><td>艦長、ソナー員、航海長</td><td>恐怖、忍耐</td></tr>
+                <tr><td>離脱</td><td>中</td><td>艦長、航海長</td><td>安堵、警戒</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <section class="section">
+          <h2>AIの使い方</h2>
+          <div class="grid two">
+            <article class="card">
+              <h3>使うべき場所</h3>
+              <ul>
+                <li>敵駆逐艦艦長: 捜索判断、護衛優先、爆雷投入、追尾方針</li>
+                <li>艦内クルー: 命令復唱、定型報告、雰囲気演出</li>
+                <li>副長 / 機関長 / ソナー員: 提案、SOPベースの半自律判断</li>
+              </ul>
+            </article>
+            <article class="card">
+              <h3>使いすぎない方がいい場所</h3>
+              <ul>
+                <li>基本操艦そのもの</li>
+                <li>雷撃解そのものの最終決定</li>
+                <li>深度や損傷の重要結果判定</li>
+              </ul>
+            </article>
+          </div>
+        </section>
+
+        <section class="section">
+          <h2>実装方針</h2>
+          <ul>
+            <li>最初から全部を再現しない</li>
+            <li><code>遊べる戦闘ループ</code> を先に作る</li>
+            <li>その後に急速潜航、復唱、損傷、群狼作戦を積み増す</li>
+          </ul>
+        </section>
+
+        <section class="section">
+          <h2>実装計画</h2>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr><th>Phase</th><th>目的</th><th>実装項目</th><th>成果物</th></tr>
+              </thead>
+              <tbody>
+                <tr><td>Phase 0</td><td>既存プロト整理</td><td>Command Chain改善、報告欄統一、画面安定化</td><td>画面プロト、役職仕様書</td></tr>
+                <tr><td>Phase 1</td><td>コア戦闘ループ</td><td><code>battlePhase</code>、敵接触、ソナー接触、雷撃段階化、離脱条件</td><td>遊べる1ミッション</td></tr>
+                <tr><td>Phase 2</td><td>急速潜航フェーズ</td><td><code>Alarm!</code>、30秒タイマー、部署タスク進行、成否補正</td><td>高密度緊急フェーズ</td></tr>
+                <tr><td>Phase 3</td><td>音声復唱・艦内演出</td><td>ドイツ語復唱テンプレート、TTSキュー、ベルと音響ミックス</td><td>没入演出</td></tr>
+                <tr><td>Phase 4</td><td>損傷・静粛潜航・回避</td><td>損傷部位、浸水、ポンプ、静粛潜航、爆雷回避</td><td>戦闘後半の深み</td></tr>
+                <tr><td>Phase 5</td><td>AIクルー / AI駆逐艦艦長</td><td>敵艦長性格差、クルー提案、SOP半自律</td><td>リプレイ性の強化</td></tr>
+                <tr><td>Phase 6</td><td>戦略層拡張</td><td>補給、修理、群狼作戦、通信、戦果管理</td><td>長期キャンペーン化</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <section class="section">
+          <h2>優先順位</h2>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr><th>優先</th><th>実装項目</th></tr>
+              </thead>
+              <tbody>
+                <tr><td>P1</td><td>コア戦闘ループ</td></tr>
+                <tr><td>P1</td><td>急速潜航</td></tr>
+                <tr><td>P1</td><td>指揮系統UIと役職報告</td></tr>
+                <tr><td>P2</td><td>ドイツ語復唱 + TTS</td></tr>
+                <tr><td>P2</td><td>損傷と静粛潜航</td></tr>
+                <tr><td>P2</td><td>雷撃盤の高度化</td></tr>
+                <tr><td>P3</td><td>AI駆逐艦艦長</td></tr>
+                <tr><td>P3</td><td>クルーSOP</td></tr>
+                <tr><td>P3</td><td>戦略層</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <section class="section">
+          <h2>現時点での推奨次アクション</h2>
+          <ol>
+            <li><code>GAME_SPEC</code> を基準に全体設計を固定する</li>
+            <li><code>Alarm!</code> フェーズを <code>battlePhase</code> として実装する</li>
+            <li>ソナー、航海、雷撃を段階的ループへ接続する</li>
+            <li>その後にドイツ語復唱とTTSを入れる</li>
+          </ol>
+          <p>この順番なら、雰囲気だけ先行して中身が空になるのを避けつつ、Uボートらしさをしっかり積み上げられる。</p>
+        </section>
+      </div>
+    </main>
+  </body>
+</html>

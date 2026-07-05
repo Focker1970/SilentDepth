@@ -1,0 +1,523 @@
+<!DOCTYPE html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Silent Depth: U-Boat</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <main class="app-shell">
+      <header class="bridge-banner panel">
+        <div>
+          <p class="eyebrow">Silent Depth / Kriegsmarine U-Boat Control</p>
+          <h1>潜水艦艦長シミュレーション</h1>
+        </div>
+        <div class="banner-strip">
+          <article class="banner-pill">
+            <span class="label">Stage</span>
+            <strong id="stage-banner">I / 雷撃訓練</strong>
+          </article>
+          <article class="banner-pill">
+            <span class="label">Zone</span>
+            <strong id="zone-label">北大西洋船団航路</strong>
+          </article>
+          <article class="banner-pill">
+            <span class="label">Alert</span>
+            <strong id="alert">静穏</strong>
+          </article>
+          <article class="banner-pill">
+            <span class="label">Light</span>
+            <strong id="light-condition">昼間</strong>
+          </article>
+          <article class="banner-pill">
+            <span class="label">Time</span>
+            <strong id="clock">00:00</strong>
+          </article>
+          <article class="banner-pill banner-controls">
+            <span class="label">Control</span>
+            <div class="banner-control-line">
+              <button id="restart" class="restart-button header-button" type="button">新任務</button>
+              <span class="banner-inline-label">難易度</span>
+              <button id="difficulty-toggle" class="header-button difficulty-button" type="button">Historical</button>
+              <span id="difficulty-label" class="visually-hidden">Historical</span>
+              <span class="banner-inline-label">独語復唱</span>
+              <button id="voice-toggle" class="header-button" type="button">ON</button>
+            </div>
+            <div class="banner-control-line">
+              <span class="banner-inline-label">時間</span>
+              <button type="button" class="time-scale-button" data-timescale="1">1x</button>
+              <button type="button" class="time-scale-button" data-timescale="2">2x</button>
+              <button type="button" class="time-scale-button" data-timescale="4">4x</button>
+            </div>
+          </article>
+        </div>
+      </header>
+
+      <div class="layout">
+        <aside class="panel left-column">
+          <section class="hero-card">
+            <p class="eyebrow">Captain Overview</p>
+            <p class="description">
+              第二次世界大戦の北大西洋。Uボート艦内で艦長、ソナー員、雷撃士、航海長の席を切り替え、連合軍コンボイを追って戦果を挙げる。
+            </p>
+            <div class="mission-card">
+              <span class="label">Mission</span>
+              <p id="mission-text"></p>
+            </div>
+            <div class="mission-card">
+              <span class="label">Stage Progress</span>
+              <p id="stage-progress">Stage 1 / 3</p>
+            </div>
+          </section>
+
+          <section class="stats-grid">
+            <article class="stat-card">
+              <span class="label">Hull</span>
+              <strong id="hull">100%</strong>
+            </article>
+            <article class="stat-card">
+              <span class="label">Battery</span>
+              <strong id="battery">100%</strong>
+            </article>
+            <article class="stat-card">
+              <span class="label">Depth</span>
+              <strong id="depth">60m</strong>
+            </article>
+            <article class="stat-card">
+              <span class="label">Speed</span>
+              <strong id="speed">3kt</strong>
+            </article>
+            <article class="stat-card">
+              <span class="label">Noise</span>
+              <strong id="noise">Low</strong>
+            </article>
+            <article class="stat-card">
+              <span class="label">Torpedoes</span>
+              <strong id="torpedoes">5+9</strong>
+            </article>
+          </section>
+
+          <section class="status-card station-meta">
+            <span class="label">Current Station</span>
+            <strong id="station-name">艦長席</strong>
+            <p id="station-description" class="support-text"></p>
+          </section>
+
+          <section class="status-card phase-meta">
+            <span class="label">Battle Phase</span>
+            <strong id="phase-name">平常監視</strong>
+            <p id="phase-description" class="support-text"></p>
+          </section>
+
+          <section class="console-card command-chain-card">
+            <span class="label">Command Chain</span>
+            <div class="chain-head">
+              <strong id="captain-order">艦長命令: 接敵準備</strong>
+              <span id="command-priority" class="priority-pill">通常</span>
+            </div>
+            <ul class="chain-list">
+              <li><span>ソナー員</span><strong id="sonar-report-brief">受動聴音を継続</strong></li>
+              <li><span>雷撃士</span><strong id="torpedo-report-brief">射撃諸元を待機</strong></li>
+              <li><span>航海長</span><strong id="navigation-report-brief">現針路を維持</strong></li>
+            </ul>
+          </section>
+
+          <section class="status-card status-brief">
+            <span class="label">Command Status</span>
+            <p id="status" class="status"></p>
+          </section>
+        </aside>
+
+        <section class="panel center-column">
+          <div class="topbar">
+            <div>
+              <p class="eyebrow">Tactical Plot</p>
+              <h2>北大西洋コンボイ戦術表示</h2>
+            </div>
+            <div class="legend">
+              <span><i class="dot sub"></i>自艦</span>
+              <span><i class="dot convoy"></i>輸送船</span>
+              <span><i class="dot escort"></i>護衛艦</span>
+              <span><i class="dot flagship"></i>重要輸送船</span>
+            </div>
+          </div>
+
+          <div class="station-tabs" role="tablist" aria-label="ステーション切替">
+            <button type="button" class="station-tab" data-station="captain">艦長</button>
+            <button type="button" class="station-tab" data-station="sonar">ソナー員</button>
+            <button type="button" class="station-tab" data-station="torpedo">雷撃士</button>
+            <button type="button" class="station-tab" data-station="navigation">航海長</button>
+          </div>
+
+          <div class="plot-stage">
+            <div class="plot-frame">
+              <canvas id="screen" width="960" height="620"></canvas>
+              <aside class="plot-overlay-card" id="theatre-plot-card">
+                <span class="label" id="theatre-plot-label">Theatre Plot</span>
+                <canvas id="theatre-plot-canvas" width="230" height="180"></canvas>
+                <p id="theatre-plot-note" class="support-text">艦長用の広域海図。</p>
+              </aside>
+              <div class="screen-bezel">
+                <span>MK.IV Combat Table</span>
+                <span>Hydrophone Link</span>
+                <span>Gyro Solver</span>
+              </div>
+            </div>
+            <aside class="console-card plot-side-card" id="periscope-measure-card" style="display:none">
+              <span class="label" id="optics-card-label">Periscope Measurement</span>
+              <p id="periscope-contact" class="support-text">焦点目標: なし</p>
+              <p id="periscope-guide" class="support-text">
+                黄色の上線をマスト頂部へ、中央水平線を喫水線へ合わせる。Tab または艦影クリックで目標切替。
+              </p>
+              <div class="duty-list compact-duty">
+                <div><dt>潜望鏡方位</dt><dd id="periscope-bearing">000°</dd></div>
+                <div><dt>艦首基準</dt><dd id="periscope-relative">+0°</dd></div>
+                <div><dt>見かけ高さ</dt><dd id="periscope-apparent">-- 目盛</dd></div>
+                <div><dt>測距一致</dt><dd id="periscope-alignment">未照準</dd></div>
+              </div>
+              <div class="button-row triple" id="optics-turn-controls">
+                <button type="button" id="periscope-left">左へ 10°</button>
+                <button type="button" id="periscope-center">艦首正面</button>
+                <button type="button" id="periscope-right">右へ 10°</button>
+              </div>
+              <div id="periscope-type-row" style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+                <span class="support-text" style="white-space:nowrap">艦種:</span>
+                <select id="periscope-type-select" style="flex:1;background:#0a2233;color:#dffaff;border:1px solid #2a5566;padding:3px 6px;border-radius:4px">
+                  <option value="">-- 不明 --</option>
+                  <option value="convoy">商船</option>
+                  <option value="flagship">重要輸送船</option>
+                  <option value="escort">駆逐艦</option>
+                </select>
+              </div>
+              <div id="periscope-reticle-row" style="display:flex;align-items:center;gap:6px;margin-bottom:6px">
+                <span class="support-text">目盛り:</span>
+                <strong id="reticle-reading" style="color:#dffaff">3.0</strong>
+              </div>
+              <div class="button-row triple" id="periscope-reticle-controls">
+                <button type="button" id="reticle-dec">−0.5</button>
+                <button type="button" id="reticle-reset">リセット</button>
+                <button type="button" id="reticle-inc">+0.5</button>
+              </div>
+              <div class="button-row single" id="periscope-range-controls">
+                <button type="button" id="range-measure">距離測定</button>
+              </div>
+              <p id="periscope-range-result" class="support-text">距離: 未測定</p>
+            </aside>
+            <aside class="console-card plot-side-card" id="tdc-card" style="display:none">
+              <span class="label">Torpedo Data Computer</span>
+              <dl class="duty-list compact-duty">
+                <div>
+                  <dt>方位 Bearing</dt>
+                  <dd><strong id="tdc-bearing">---</strong>° <button type="button" id="tdc-sync-bearing" style="padding:2px 6px;font-size:11px">方位同期</button></dd>
+                </div>
+                <div>
+                  <dt>距離 Range</dt>
+                  <dd><strong id="tdc-range">---</strong>m <button type="button" id="tdc-sync-range" style="padding:2px 6px;font-size:11px">潜望鏡同期</button></dd>
+                </div>
+                <div>
+                  <dt>目標速力 Speed</dt>
+                  <dd>
+                    <button type="button" id="tdc-speed-dec" style="padding:2px 6px;font-size:11px">−</button>
+                    <strong id="tdc-speed">3.0</strong>kt
+                    <button type="button" id="tdc-speed-inc" style="padding:2px 6px;font-size:11px">+</button>
+                  </dd>
+                </div>
+                <div>
+                  <dt>艦首角 AOB</dt>
+                  <dd>
+                    <button type="button" id="tdc-aob-dec" style="padding:2px 6px;font-size:11px">−5°</button>
+                    <strong id="tdc-aob">+90</strong>°
+                    <button type="button" id="tdc-aob-inc" style="padding:2px 6px;font-size:11px">+5°</button>
+                  </dd>
+                </div>
+              </dl>
+              <div style="margin-top:10px;padding-top:10px;border-top:1px solid rgba(141,219,237,0.2)">
+                <span class="support-text">観測補助</span>
+                <dl class="duty-list compact-duty" style="margin-top:8px">
+                  <div>
+                    <dt>Speed 推定</dt>
+                    <dd><strong id="tdc-speed-suggest">---</strong>kt <button type="button" id="tdc-apply-speed" style="padding:2px 6px;font-size:11px">採用</button></dd>
+                  </div>
+                  <div>
+                    <dt>AOB 推定</dt>
+                    <dd><strong id="tdc-aob-suggest">---</strong>° <button type="button" id="tdc-apply-aob" style="padding:2px 6px;font-size:11px">採用</button></dd>
+                  </div>
+                </dl>
+                <p id="tdc-estimate-note" class="support-text" style="margin-top:8px">
+                  潜望鏡観測ログが不足。
+                </p>
+              </div>
+              <div style="margin-top:8px;padding-top:8px;border-top:1px solid rgba(141,219,237,0.2);display:flex;align-items:center;gap:8px">
+                <span class="support-text">TDC出力 進角:</span>
+                <strong id="tdc-gyro">---</strong>°
+                <span id="tdc-valid" style="font-size:12px">---</span>
+              </div>
+            </aside>
+          </div>
+
+          <div class="tactical-strip">
+            <article class="strip-card">
+              <span class="label">Battle Phase</span>
+              <strong id="hud-phase">平常監視</strong>
+              <p id="hud-phase-note" class="support-text">広域哨戒を維持。</p>
+            </article>
+            <article class="strip-card">
+              <span class="label">Contact Trigger</span>
+              <strong id="hud-trigger">接触なし</strong>
+              <p id="hud-trigger-note" class="support-text">見張り・受動聴音とも静穏。</p>
+            </article>
+            <article class="strip-card">
+              <span class="label">Immediate Objective</span>
+              <strong id="hud-objective">索敵継続</strong>
+              <p id="hud-objective-note" class="support-text">コンボイ航跡の再捕捉を優先。</p>
+            </article>
+            <article class="strip-card">
+              <span class="label">Torpedo Status</span>
+              <strong id="hud-torpedo-status">Armed</strong>
+              <p id="hud-torpedo-note" class="support-text">発射管待機。</p>
+            </article>
+            <article class="strip-card">
+              <span class="label">Acoustic Mode</span>
+              <strong id="hud-acoustic-mode">Passive</strong>
+              <p id="hud-acoustic-note" class="support-text">ヘッドホン監視を継続。</p>
+            </article>
+          </div>
+        </section>
+
+        <aside class="panel right-column">
+          <div class="log-head">
+            <div>
+              <p class="eyebrow">U-Boat Interior Console</p>
+              <h2>Uボート艦内コンソール</h2>
+            </div>
+          </div>
+
+          <section class="station-panel" data-panel="captain">
+            <div class="console-card duty-card">
+              <span class="label">Duty Board</span>
+              <dl class="duty-list">
+                <div><dt>現在の任務</dt><dd id="captain-duty">接敵準備</dd></div>
+                <div><dt>主要操作</dt><dd id="captain-ops">意図命令、観測、雷撃許可</dd></div>
+                <div><dt>最新報告</dt><dd id="captain-report">全部署から接敵準備の報告を受領。</dd></div>
+              </dl>
+            </div>
+            <div class="control-card">
+              <span class="label">Command Orders</span>
+              <div class="button-row dual">
+                <button type="button" id="captain-intent-approach">接敵維持</button>
+                <button type="button" id="captain-intent-evade">被探知回避</button>
+              </div>
+              <div class="button-row dual">
+                <button type="button" id="captain-intent-periscope">潜望鏡深度へ</button>
+                <button type="button" id="captain-intent-surface">浮上</button>
+              </div>
+              <div class="button-row dual">
+                <button type="button" id="captain-intent-deep">深深度退避</button>
+                <button type="button" id="captain-intent-quiet-starboard">静かに右へ回避</button>
+              </div>
+              <div class="button-row dual">
+                <button type="button" id="captain-intent-egress">全速離脱</button>
+                <button type="button" id="captain-alarm">Alarm! 急速潜航</button>
+              </div>
+              <div class="button-row">
+                <button type="button" id="captain-ping">ピング</button>
+                <button type="button" id="captain-silent">静粛</button>
+                <button type="button" id="captain-fire">雷撃</button>
+              </div>
+              <div class="button-row dual">
+                <button type="button" id="captain-periscope">潜望鏡</button>
+                <button type="button" id="captain-binocular">浮上双眼鏡</button>
+              </div>
+              <div class="button-row single">
+                <button type="button" id="captain-normal-view">通常監視へ戻る</button>
+              </div>
+              <div class="console-card alarm-card" id="surface-attack-card" style="display:none;margin-top:12px;padding:12px 14px">
+                <span class="label">Post Shot Decision</span>
+                <p id="surface-attack-summary" class="support-text">危険な浮上発射後の判断待ち。</p>
+                <div class="button-row dual" style="margin-top:10px">
+                  <button type="button" id="surface-attack-dive">即潜航</button>
+                  <button type="button" id="surface-attack-egress">水上離脱</button>
+                </div>
+              </div>
+            </div>
+            <div class="console-card alarm-card" id="captain-alarm-card">
+              <span class="label">Alarm Dive</span>
+              <div class="alarm-head">
+                <strong id="alarm-state">待機</strong>
+                <span id="alarm-timer" class="alarm-timer">30.0s</span>
+              </div>
+              <p id="alarm-summary" class="support-text">
+                浮上中に敵航空機や駆逐艦に発見された際、30秒以内に完全潜航を完了させる。
+              </p>
+              <dl class="duty-list compact-duty">
+                <div><dt>進行</dt><dd id="alarm-progress">0 / 5</dd></div>
+                <div><dt>予想結果</dt><dd id="alarm-outlook">通常</dd></div>
+                <div><dt>部署練度</dt><dd id="alarm-skill-summary">標準</dd></div>
+                <div><dt>進行方式</dt><dd>自動</dd></div>
+              </dl>
+              <ul id="alarm-task-list" class="alarm-task-list"></ul>
+            </div>
+            <div class="console-card">
+              <span class="label">Captain Notes</span>
+              <p id="captain-summary"></p>
+            </div>
+            <div class="console-card">
+              <span class="label">Captain Intent</span>
+              <p id="captain-intent">護衛駆逐艦に先に見つからず、重要輸送船へ有利な雷撃位置を作る。</p>
+            </div>
+          </section>
+
+          <section class="station-panel" data-panel="sonar">
+            <div class="console-card duty-card">
+              <span class="label">Duty Board</span>
+              <dl class="duty-list">
+                <div><dt>現在の任務</dt><dd id="sonar-duty">受動聴音</dd></div>
+                <div><dt>主要操作</dt><dd id="sonar-ops">方位分類、接触追尾、警報</dd></div>
+                <div><dt>最新報告</dt><dd id="sonar-report">有意な接触なし。受動聴音を継続。</dd></div>
+              </dl>
+            </div>
+            <div class="control-card">
+              <span class="label">Sonar Console</span>
+              <div class="button-row triple">
+                <button type="button" id="audio-toggle">音響開始</button>
+                <button type="button" id="voice-mode-toggle">復唱: 録音</button>
+                <button type="button" id="ping">ピング</button>
+                <button type="button" id="silent">静粛</button>
+              </div>
+              <p class="support-text" id="voice-status">
+                復唱は録音音声を優先。ボタンで役職別 TTS に切替可能。
+              </p>
+              <p class="support-text">
+                ヘッドホン推奨。左右の定位と音色差で方位と目標種別を聞き分ける。
+              </p>
+            </div>
+            <div class="console-card sonar-card">
+              <span class="label">Passive Contacts</span>
+              <ul id="sonar-list" class="contact-list"></ul>
+            </div>
+            <div class="console-card">
+              <span class="label">Report To Captain</span>
+              <p id="sonar-report-detail"></p>
+            </div>
+          </section>
+
+          <section class="station-panel" data-panel="torpedo">
+            <div class="console-card duty-card">
+              <span class="label">Duty Board</span>
+              <dl class="duty-list">
+                <div><dt>現在の任務</dt><dd id="torpedo-duty">射撃諸元待機</dd></div>
+                <div><dt>主要操作</dt><dd id="torpedo-ops">目標選定、進角確認、発射</dd></div>
+                <div><dt>最新報告</dt><dd id="torpedo-report">射撃解なし。目標観測を待機。</dd></div>
+              </dl>
+            </div>
+            <div class="control-card">
+              <span class="label">Fire Control</span>
+              <div class="button-row dual">
+                <button type="button" id="torpedo-select">標的選定</button>
+                <button type="button" id="torpedo-input">諸元入力</button>
+              </div>
+              <div class="button-row dual">
+                <button type="button" id="torpedo-prepare">発射準備</button>
+                <button type="button" id="fire">発射</button>
+              </div>
+              <div class="button-row triple">
+                <button type="button" data-turn="-25">左へ</button>
+                <button type="button" data-action="hold-course">保持</button>
+                <button type="button" data-turn="25">右へ</button>
+              </div>
+              <div class="button-row">
+                <button type="button" data-depth="15">15m</button>
+                <button type="button" data-depth="60">60m</button>
+                <button type="button" data-depth="140">140m</button>
+                <button type="button" data-depth="230">230m</button>
+              </div>
+            </div>
+            <div class="console-card">
+              <span class="label">Best Shot</span>
+              <p id="torpedo-solution"></p>
+            </div>
+            <div class="console-card">
+              <span class="label">Firing Sequence</span>
+              <dl class="duty-list compact-duty">
+                <div><dt>段階</dt><dd id="torpedo-sequence-stage">標的待ち</dd></div>
+                <div><dt>選定目標</dt><dd id="torpedo-selected-target">未選定</dd></div>
+                <div><dt>使用発射管</dt><dd id="torpedo-selected-tube">未選定</dd></div>
+                <div><dt>諸元入力</dt><dd id="torpedo-input-status">未入力</dd></div>
+                <div><dt>発射準備</dt><dd id="torpedo-prepare-status">未準備</dd></div>
+                <div><dt>発射管処理</dt><dd id="torpedo-tube-status">待機</dd></div>
+                <div><dt>発射管群</dt><dd id="torpedo-tube-bank">I 装填 / II 装填 / III 装填 / IV 装填 / V 装填</dd></div>
+                <div><dt>予備魚雷</dt><dd id="torpedo-reserve-count">9 本</dd></div>
+                <div><dt>後処理</dt><dd id="torpedo-post-status">なし</dd></div>
+              </dl>
+            </div>
+            <div class="console-card">
+              <span class="label">Solution Metrics</span>
+              <dl class="duty-list compact-duty">
+                <div><dt>解精度</dt><dd id="torpedo-solution-rating">0%</dd></div>
+                <div><dt>有効ジャイロ限界</dt><dd id="torpedo-gyro-limit">0°</dd></div>
+              </dl>
+            </div>
+            <div class="console-card">
+              <span class="label">Report To Captain</span>
+              <p id="torpedo-report-detail"></p>
+            </div>
+          </section>
+
+          <section class="station-panel" data-panel="navigation">
+            <div class="console-card duty-card">
+              <span class="label">Duty Board</span>
+              <dl class="duty-list">
+                <div><dt>現在の任務</dt><dd id="navigation-duty">針路維持</dd></div>
+                <div><dt>主要操作</dt><dd id="navigation-ops">深度、針路、速力、離脱管理</dd></div>
+                <div><dt>最新報告</dt><dd id="navigation-report">現針路を維持。接敵コース良好。</dd></div>
+              </dl>
+            </div>
+            <div class="control-card">
+              <span class="label">Helm Orders</span>
+              <div class="button-row">
+                <button type="button" data-speed="0">停止</button>
+                <button type="button" data-speed="3">微速</button>
+                <button type="button" data-speed="6">巡航</button>
+                <button type="button" data-speed="9">全速</button>
+              </div>
+              <div class="button-row">
+                <button type="button" data-depth="15">15m</button>
+                <button type="button" data-depth="60">60m</button>
+                <button type="button" data-depth="140">140m</button>
+                <button type="button" data-depth="230">230m</button>
+              </div>
+              <div class="button-row triple">
+                <button type="button" data-turn="-25">左へ</button>
+                <button type="button" id="nav-hold-course">保持</button>
+                <button type="button" data-turn="25">右へ</button>
+              </div>
+            </div>
+            <div class="console-card">
+              <span class="label">Navigation Metrics</span>
+              <dl class="duty-list compact-duty">
+                <div><dt>接近効率</dt><dd id="nav-approach-rating">0%</dd></div>
+                <div><dt>針路誤差</dt><dd id="nav-heading-error">0°</dd></div>
+                <div><dt>深度誤差</dt><dd id="nav-depth-error">0m</dd></div>
+                <div><dt>潜望鏡安定</dt><dd id="nav-periscope-stability">不十分</dd></div>
+              </dl>
+            </div>
+            <div class="console-card">
+              <span class="label">Report To Captain</span>
+              <p id="navigation-report-detail"></p>
+            </div>
+          </section>
+
+          <section class="console-card log-card">
+            <span class="label">Bridge Log</span>
+            <ol id="log" class="log"></ol>
+          </section>
+        </aside>
+      </div>
+    </main>
+
+    <div class="build-version" aria-label="build version">v0.1.0</div>
+
+    <script src="script.js"></script>
+  </body>
+</html>

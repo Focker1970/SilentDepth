@@ -1,0 +1,993 @@
+<!DOCTYPE html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>SilentDepth 役職仕様</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        --bg-top: #05131d;
+        --bg-bottom: #102b3c;
+        --panel: rgba(7, 21, 31, 0.84);
+        --panel-border: rgba(139, 220, 241, 0.16);
+        --text: #edf8fb;
+        --muted: #a8c0cb;
+        --accent: #dffbff;
+        --accent-soft: #8bdcf1;
+        --warning: #ffd47b;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        min-height: 100vh;
+        font-family: "Avenir Next", "Hiragino Sans", sans-serif;
+        color: var(--text);
+        background:
+          radial-gradient(circle at top, rgba(139, 220, 241, 0.14), transparent 26%),
+          linear-gradient(180deg, var(--bg-bottom), var(--bg-top));
+      }
+
+      body::before {
+        content: "";
+        position: fixed;
+        inset: 0;
+        background-image:
+          linear-gradient(rgba(255, 255, 255, 0.03) 1px, transparent 1px),
+          linear-gradient(90deg, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
+        background-size: 42px 42px;
+        opacity: 0.16;
+        pointer-events: none;
+      }
+
+      main {
+        position: relative;
+        z-index: 1;
+        max-width: 1320px;
+        margin: 0 auto;
+        padding: 24px;
+      }
+
+      .hero,
+      .section {
+        border: 1px solid var(--panel-border);
+        border-radius: 28px;
+        background: var(--panel);
+        backdrop-filter: blur(12px);
+        box-shadow: 0 24px 70px rgba(0, 0, 0, 0.28);
+      }
+
+      .hero {
+        padding: 30px;
+      }
+
+      .section {
+        padding: 24px;
+      }
+
+      .stack {
+        display: grid;
+        gap: 20px;
+        margin-top: 20px;
+      }
+
+      .eyebrow {
+        margin: 0 0 10px;
+        color: var(--accent-soft);
+        text-transform: uppercase;
+        letter-spacing: 0.18em;
+      }
+
+      h1,
+      h2,
+      h3,
+      p {
+        margin-top: 0;
+      }
+
+      h1 {
+        margin-bottom: 12px;
+        font-size: clamp(2.6rem, 8vw, 4.6rem);
+        line-height: 0.96;
+      }
+
+      h2 {
+        margin-bottom: 14px;
+        font-size: 1.6rem;
+      }
+
+      h3 {
+        margin-bottom: 10px;
+        font-size: 1.12rem;
+        color: var(--accent);
+      }
+
+      p,
+      li {
+        line-height: 1.8;
+        color: var(--muted);
+      }
+
+      ul,
+      ol {
+        margin: 0;
+        padding-left: 22px;
+      }
+
+      li + li {
+        margin-top: 6px;
+      }
+
+      code {
+        padding: 2px 6px;
+        border-radius: 8px;
+        background: rgba(255, 255, 255, 0.08);
+        color: var(--text);
+        font-family: "SFMono-Regular", Consolas, monospace;
+      }
+
+      .pill {
+        display: inline-block;
+        margin-top: 10px;
+        padding: 8px 12px;
+        border-radius: 999px;
+        background: rgba(139, 220, 241, 0.12);
+        color: var(--accent);
+      }
+
+      .grid {
+        display: grid;
+        gap: 16px;
+      }
+
+      .grid.two {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+
+      .card {
+        padding: 18px;
+        border-radius: 20px;
+        background: rgba(255, 255, 255, 0.04);
+        border: 1px solid rgba(255, 255, 255, 0.05);
+      }
+
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-top: 12px;
+        overflow: hidden;
+        border-radius: 18px;
+        background: rgba(255, 255, 255, 0.03);
+      }
+
+      th,
+      td {
+        padding: 12px 14px;
+        text-align: left;
+        vertical-align: top;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+      }
+
+      th {
+        color: var(--accent);
+        background: rgba(139, 220, 241, 0.08);
+        font-weight: 700;
+      }
+
+      tr:last-child td {
+        border-bottom: 0;
+      }
+
+      .table-wrap {
+        overflow-x: auto;
+      }
+
+      .section-note {
+        margin-top: 12px;
+        color: var(--warning);
+      }
+
+      @media (max-width: 900px) {
+        .grid.two {
+          grid-template-columns: 1fr;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <section class="hero">
+        <p class="eyebrow">SilentDepth Role Specification</p>
+        <h1>SilentDepth 役職仕様</h1>
+        <p>
+          <code>SilentDepth</code> を「第二次世界大戦の北大西洋における Uボートのコンボイ戦シミュレーション」として実装するための役職設計資料。
+          急速潜航、潜航後戦闘、指揮系統、UIマッピングまでを実装向けに整理している。
+        </p>
+        <div class="pill">対象: Uボート / 北大西洋 / コンボイ戦 / 急速潜航 / 潜航後戦闘</div>
+      </section>
+
+      <div class="stack">
+        <section class="section">
+          <h2>概要</h2>
+          <p>目的は次の3点。</p>
+          <ol>
+            <li><code>急速潜航</code> と <code>潜航後戦闘</code> を明確に分離する</li>
+            <li><code>艦長 / ソナー員 / 雷撃士 / 航海長</code> をプレイヤーが切り替えて遊べる主役職にする</li>
+            <li>機関部・見張り・通信士などの非プレイ部署も、戦闘結果に影響するシステム役として組み込む</li>
+          </ol>
+        </section>
+
+        <section class="section">
+          <h2>フェーズ構成</h2>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>フェーズ</th>
+                  <th>時間帯</th>
+                  <th>概要</th>
+                  <th>主役職</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>平時監視</td>
+                  <td>浮上中 / 通常航行中</td>
+                  <td>見張り、哨戒、コンボイ捜索</td>
+                  <td>艦長、航海長</td>
+                </tr>
+                <tr>
+                  <td>急速潜航</td>
+                  <td><code>Alarm!</code> 発令から約30秒</td>
+                  <td>敵航空機・駆逐艦発見時の緊急潜航</td>
+                  <td>全部署</td>
+                </tr>
+                <tr>
+                  <td>潜航戦闘</td>
+                  <td>潜航完了後</td>
+                  <td>聴音、追尾、雷撃、回避</td>
+                  <td>ソナー員、雷撃士、航海長、艦長</td>
+                </tr>
+                <tr>
+                  <td>静粛潜航</td>
+                  <td>爆雷回避中</td>
+                  <td>全艦の騒音を最低化し生残優先</td>
+                  <td>艦長、ソナー員</td>
+                </tr>
+                <tr>
+                  <td>離脱</td>
+                  <td>雷撃後 / 任務完了後</td>
+                  <td>敵護衛を振り切って脱出</td>
+                  <td>艦長、航海長</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <section class="section">
+          <h2>プレイ役職一覧</h2>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>役職</th>
+                  <th>プレイヤー操作</th>
+                  <th>主な情報源</th>
+                  <th>成功責任</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>艦長</td>
+                  <td>命令発令、観測モード切替、雷撃許可、静粛航行、急速潜航発令</td>
+                  <td>潜望鏡、双眼鏡、各部署報告</td>
+                  <td>全体判断、攻撃タイミング、退避判断</td>
+                </tr>
+                <tr>
+                  <td>ソナー員</td>
+                  <td>受動聴音、能動ソナー、接触分類、方位報告</td>
+                  <td>ハイドロフォン、音響UI</td>
+                  <td>敵位置推定、護衛接近警報</td>
+                </tr>
+                <tr>
+                  <td>雷撃士</td>
+                  <td>TDC入力相当、射撃諸元確認、発射管準備、発射</td>
+                  <td>艦長観測値、ソナー報告、雷撃盤UI</td>
+                  <td>命中解の構築、発射判断補助</td>
+                </tr>
+                <tr>
+                  <td>航海長</td>
+                  <td>深度、針路、速力、トリム、潜望深度維持</td>
+                  <td>発令所計器、海図、命令系統</td>
+                  <td>潜航姿勢、接敵コース、離脱コース</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <section class="section">
+          <h2>非プレイ部署一覧</h2>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>部署</th>
+                  <th>システム上の役割</th>
+                  <th>失敗時の影響</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>見張り員 / 当直将校</td>
+                  <td>敵の早期発見、司令塔ハッチ閉鎖</td>
+                  <td>潜航遅延、浸水リスク</td>
+                </tr>
+                <tr>
+                  <td>機関員</td>
+                  <td>ディーゼル停止、モーター切替、吸排気弁閉鎖</td>
+                  <td>潜航不能、浸水、沈没</td>
+                </tr>
+                <tr>
+                  <td>機関長（LI）</td>
+                  <td>メインバラストベント開放、注排水、トリム調整</td>
+                  <td>潜航速度低下、姿勢悪化</td>
+                </tr>
+                <tr>
+                  <td>非番乗組員</td>
+                  <td>前部移動による艦首加重</td>
+                  <td>潜降速度低下</td>
+                </tr>
+                <tr>
+                  <td>調理長</td>
+                  <td>火気停止、安全確保</td>
+                  <td>火災、有毒ガスイベント</td>
+                </tr>
+                <tr>
+                  <td>通信士</td>
+                  <td>会敵報告、暗号通信準備</td>
+                  <td>戦果報告不能、命令遅延</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <section class="section">
+          <h2>部署別コマンド設計案</h2>
+          <div class="grid two">
+            <article class="card">
+              <h3>1. 艦長・発令所</h3>
+              <ul>
+                <li>航行指示: <code>微速 / 半速 / 全速</code> <code>前進 / 後進</code> <code>面舵 / 取舵</code></li>
+                <li>深度指示: <code>浮上</code> <code>潜望鏡深度</code> <code>シュノーケル深度</code> <code>指定深度</code> <code>急速潜航（Alarm）</code></li>
+                <li>戦闘指示: <code>戦闘配置</code> <code>静粛潜航</code> <code>デコイ射出</code></li>
+                <li>観測: <code>潜望鏡昇降</code> <code>倍率変更</code> <code>ターゲットロック</code></li>
+              </ul>
+            </article>
+            <article class="card">
+              <h3>2. 第1当直将校（TDC）</h3>
+              <ul>
+                <li>観測データ入力: <code>距離</code> <code>速度</code> <code>AOB</code></li>
+                <li>魚雷設定: <code>深度設定</code> <code>信管設定</code> <code>速度設定</code></li>
+                <li>発射シーケンス: <code>同期</code> <code>発射</code></li>
+              </ul>
+            </article>
+            <article class="card">
+              <h3>3. 機関長（LI）</h3>
+              <ul>
+                <li>バラスト・トリム制御: <code>注水</code> <code>排水</code> <code>艦首艦尾バランス調整</code></li>
+                <li>動力切り替え: <code>ディーゼル / モーター切替</code> <code>充電モード移行</code></li>
+                <li>ダメージコントロール: <code>ビルジポンプ</code> <code>修理優先度設定</code></li>
+              </ul>
+            </article>
+            <article class="card">
+              <h3>4. 音響・通信部門</h3>
+              <ul>
+                <li>ソナー操作: <code>聴音角ダイヤル</code> <code>周波数フィルター</code></li>
+                <li>報告要求: <code>接敵報告</code> <code>距離・速度推定</code></li>
+                <li>通信: <code>暗号電文送受信</code> <code>群狼作戦要請</code></li>
+              </ul>
+            </article>
+          </div>
+          <div class="card" style="margin-top:16px;">
+            <h3>5. 水雷部門</h3>
+            <ul>
+              <li>発射管管理: <code>注水</code> <code>前扉開閉</code> <code>引き出し整備</code></li>
+              <li>発射準備: <code>ジャイロ同期</code> <code>発射管準備完了報告</code></li>
+            </ul>
+          </div>
+        </section>
+
+        <section class="section">
+          <h2>急速潜航フェーズ仕様</h2>
+          <h3>フェーズ概要</h3>
+          <ul>
+            <li>トリガー: <code>Alarm!</code> ボタン、または敵航空機 / 駆逐艦の近距離発見</li>
+            <li>制限時間: <code>30秒</code></li>
+            <li>勝利条件: 制限時間内に <code>潜航完了</code> 状態へ移行</li>
+            <li>失敗条件: ハッチ未閉鎖、吸排気弁未閉鎖、潜航遅延、敵発見状態で浮上継続</li>
+          </ul>
+
+          <h3>急速潜航タスク表</h3>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>順位</th>
+                  <th>部署</th>
+                  <th>アクション</th>
+                  <th>目標時間</th>
+                  <th>実装状態</th>
+                  <th>失敗ペナルティ</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr><td>1</td><td>艦長</td><td><code>Alarm!</code> 発令</td><td>即時</td><td><code>alarmTriggered</code></td><td>全処理が始まらない</td></tr>
+                <tr><td>2</td><td>見張り員</td><td>艦内退避、ハッチ閉鎖</td><td>0-5秒</td><td><code>hatchClosed</code></td><td>浸水、潜航失敗率上昇</td></tr>
+                <tr><td>3</td><td>機関員</td><td>ディーゼル停止</td><td>0-8秒</td><td><code>dieselStopped</code></td><td>潜航開始不可</td></tr>
+                <tr><td>4</td><td>機関員</td><td>吸排気弁閉鎖</td><td>0-10秒</td><td><code>ventsSealed</code></td><td>浸水即失敗候補</td></tr>
+                <tr><td>5</td><td>機関部</td><td>電動モーター起動</td><td>5-12秒</td><td><code>motorEngaged</code></td><td>速力低下、潜降遅延</td></tr>
+                <tr><td>6</td><td>機関長</td><td>バラストベント開放</td><td>5-12秒</td><td><code>ballastFlooding</code></td><td>潜航速度低下</td></tr>
+                <tr><td>7</td><td>操舵手 / 潜舵手</td><td>最大下げ角</td><td>8-15秒</td><td><code>hardDiveAngle</code></td><td>艦首が入らず潜航遅延</td></tr>
+                <tr><td>8</td><td>非番乗組員</td><td>前部魚雷室へ移動</td><td>8-18秒</td><td><code>forwardWeightShift</code></td><td>潜降効率低下</td></tr>
+                <tr><td>9</td><td>航海長</td><td>目標深度設定</td><td>10-20秒</td><td><code>crashDiveDepthSet</code></td><td>深度制御不安定</td></tr>
+                <tr><td>10</td><td>艦全体</td><td>完全潜航</td><td>20-30秒</td><td><code>crashDiveComplete</code></td><td>発見・攻撃対象になる</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <h3>急速潜航のゲーム実装要件</h3>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>要件ID</th>
+                  <th>内容</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr><td>CD-01</td><td><code>Alarm!</code> 発令で通常操作を一時的に制限し、急速潜航専用UIへ移行する</td></tr>
+                <tr><td>CD-02</td><td>30秒タイマーを表示し、各部署タスクを時系列で進行表示する</td></tr>
+                <tr><td>CD-03</td><td>艦長は発令だけでなく、深度目標や静粛移行の判断も行う</td></tr>
+                <tr><td>CD-04</td><td>航海長操作が遅いと潜航時間が伸びる</td></tr>
+                <tr><td>CD-05</td><td>ハッチ・吸排気弁・モーター切替はシステムイベントとして進行するが、遅延や故障判定を持てるようにする</td></tr>
+                <tr><td>CD-06</td><td>成否で <code>被探知率</code> <code>初期深度</code> <code>艦内損傷</code> <code>乗員士気</code> に補正を与える</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <section class="section">
+          <h2>潜航後戦闘フェーズ仕様</h2>
+          <div class="grid two">
+            <article class="card">
+              <h3>艦長</h3>
+              <ul>
+                <li>主目的: 戦術判断の最終責任者</li>
+                <li>主要操作: 観測モード切替、雷撃許可、静粛航行、回避命令、離脱命令</li>
+                <li>主要入力: ソナー報告、雷撃解、航海情報</li>
+                <li>主要出力: <code>艦長命令</code> と <code>優先度</code></li>
+                <li>UI要素: <code>Command Chain</code>, <code>Captain Intent</code>, <code>潜望鏡</code>, <code>浮上双眼鏡</code>, <code>Alarm!</code></li>
+              </ul>
+            </article>
+            <article class="card">
+              <h3>ソナー員</h3>
+              <ul>
+                <li>主目的: 外界情報の中核</li>
+                <li>主要操作: 受動聴音、能動ソナー、接触分類、報告</li>
+                <li>主要入力: 音響信号、接触履歴</li>
+                <li>主要出力: 方位、推定距離、種別、速度評価、護衛接近警報</li>
+                <li>UI要素: ヘッドホン向け音響、接触一覧、艦長向け報告欄</li>
+              </ul>
+            </article>
+            <article class="card">
+              <h3>雷撃士</h3>
+              <ul>
+                <li>主目的: 命中可能な射撃解を作る</li>
+                <li>主要操作: 目標選定、進角計算、発射管準備、発射</li>
+                <li>主要入力: 艦長観測値、ソナー方位、敵針路・速力</li>
+                <li>主要出力: <code>進角</code>, <code>AOB</code>, <code>会敵時間</code>, <code>発射可否</code>, <code>注水状態</code></li>
+                <li>UI要素: 雷撃盤、最良射撃解、報告欄</li>
+              </ul>
+            </article>
+            <article class="card">
+              <h3>航海長</h3>
+              <ul>
+                <li>主目的: 深度・針路・艦姿勢の維持</li>
+                <li>主要操作: 深度変更、針路変更、速力変更、潜望鏡深度維持</li>
+                <li>主要入力: 艦長命令、敵方位、潜航状態</li>
+                <li>主要出力: 針路維持、回避コース、離脱コース</li>
+                <li>UI要素: Helm Orders, Nav Plot, 報告欄</li>
+              </ul>
+            </article>
+          </div>
+        </section>
+
+        <section class="section">
+          <h2>戦闘状態の詳細シフト</h2>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>状態</th>
+                  <th>艦長</th>
+                  <th>ソナー員</th>
+                  <th>雷撃士</th>
+                  <th>航海長</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr><td>接敵前</td><td>接近方針決定</td><td>遠距離接触探索</td><td>射撃待機</td><td>低速接近</td></tr>
+                <tr><td>接敵中</td><td>潜望鏡観測</td><td>方位更新</td><td>解構築</td><td>射点維持</td></tr>
+                <tr><td>雷撃直前</td><td>発射許可</td><td>護衛位置監視</td><td>発射管最終準備</td><td>針路固定</td></tr>
+                <tr><td>雷撃直後</td><td>回避判断</td><td>命中音確認</td><td>再装填 / 再計算</td><td>回避針路</td></tr>
+                <tr><td>爆雷回避</td><td>静粛航行命令</td><td>駆逐艦追尾</td><td>無音待機</td><td>深深度・回避</td></tr>
+                <tr><td>離脱</td><td>離脱命令</td><td>背後接触監視</td><td>残弾確認</td><td>海域離脱航路</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <section class="section">
+          <h2>UI実装マッピング</h2>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>UI領域</th>
+                  <th>用途</th>
+                  <th>主役職</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr><td>左カラム <code>Command Chain</code></td><td>艦長命令と各部署の復唱・進行状況</td><td>全体</td></tr>
+                <tr><td>中央 <code>Tactical Plot</code></td><td>戦術海図、潜望鏡 / 双眼鏡 / 通常表示</td><td>艦長、航海長</td></tr>
+                <tr><td>右カラム <code>Captain / Sonar / Torpedo / Navigation</code></td><td>各席の主操作UI</td><td>各役職</td></tr>
+                <tr><td><code>Bridge Log</code></td><td>時系列イベントと命令履歴</td><td>全体</td></tr>
+                <tr><td><code>Alarm!</code> 専用UI</td><td>急速潜航タスク一覧、残秒数、進行率</td><td>全体</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <section class="section">
+          <h2>状態変数案</h2>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>変数名</th>
+                  <th>型</th>
+                  <th>用途</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr><td><code>battlePhase</code></td><td>string</td><td><code>patrol</code>, <code>alarm_dive</code>, <code>submerged_combat</code>, <code>silent_running</code>, <code>egress</code></td></tr>
+                <tr><td><code>alarmTimer</code></td><td>number</td><td>急速潜航の残時間</td></tr>
+                <tr><td><code>departmentReadiness</code></td><td>object</td><td>各部署のタスク進行</td></tr>
+                <tr><td><code>captainOrder</code></td><td>string</td><td>現在の艦長命令</td></tr>
+                <tr><td><code>commandPriority</code></td><td>string</td><td><code>normal</code>, <code>high</code>, <code>critical</code></td></tr>
+                <tr><td><code>viewMode</code></td><td>string</td><td><code>normal</code>, <code>periscope</code>, <code>binocular</code></td></tr>
+                <tr><td><code>sonarContacts</code></td><td>array</td><td>接触一覧</td></tr>
+                <tr><td><code>torpedoSolutions</code></td><td>array</td><td>射撃解候補</td></tr>
+                <tr><td><code>trimState</code></td><td>object</td><td>艦首艦尾の姿勢</td></tr>
+                <tr><td><code>noiseProfile</code></td><td>object</td><td>艦内外の騒音状態</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <section class="section">
+          <h2>イベント一覧</h2>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>イベントID</th>
+                  <th>発火条件</th>
+                  <th>効果</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr><td><code>EVENT_ALARM_DIVE</code></td><td>敵航空機または駆逐艦を近距離発見</td><td>急速潜航フェーズへ</td></tr>
+                <tr><td><code>EVENT_HATCH_DELAY</code></td><td>ハッチ閉鎖遅延</td><td>浸水リスク上昇</td></tr>
+                <tr><td><code>EVENT_ENGINE_SWITCH_FAIL</code></td><td>モーター切替失敗</td><td>潜航遅延</td></tr>
+                <tr><td><code>EVENT_DESTROYER_CONTACT</code></td><td>ソナーが高速スクリュー音を検出</td><td>護衛警戒度上昇</td></tr>
+                <tr><td><code>EVENT_TORPEDO_READY</code></td><td>射撃解成立、発射管準備完了</td><td>艦長へ雷撃許可要請</td></tr>
+                <tr><td><code>EVENT_DEPTH_CHARGE_RUN</code></td><td>駆逐艦が真上を通過</td><td>静粛潜航 / 爆雷回避へ</td></tr>
+                <tr><td><code>EVENT_EGRESS</code></td><td>目標撃沈または任務打ち切り</td><td>離脱フェーズへ</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <section class="section">
+          <h2>実装優先順位</h2>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>優先</th>
+                  <th>実装項目</th>
+                  <th>理由</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr><td>P1</td><td>急速潜航フェーズ</td><td>Uボートらしさの核</td></tr>
+                <tr><td>P1</td><td>Command Chain と各部署報告更新</td><td>指揮系統の体感に直結</td></tr>
+                <tr><td>P1</td><td>ソナー主導の戦闘情報ループ</td><td>潜航後戦闘の中心</td></tr>
+                <tr><td>P2</td><td>雷撃前手順の段階化</td><td>雷撃席の遊びを深くする</td></tr>
+                <tr><td>P2</td><td>静粛潜航と爆雷回避</td><td>生残戦として重要</td></tr>
+                <tr><td>P3</td><td>通信士・戦果報告</td><td>雰囲気と戦略レイヤーの補強</td></tr>
+                <tr><td>P3</td><td>故障・遅延イベント</td><td>緊張感の追加</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <section class="section">
+          <h2>ゲームの方向性案</h2>
+          <div class="grid two">
+            <article class="card">
+              <h3>スタイルA: フルボイス・コマンド没入型</h3>
+              <ul>
+                <li>プレイヤーは艦長として音声または疑似音声UIで命令を下す</li>
+                <li>NPCクルーが復唱し、命令遅延や誤認がそのままゲーム性になる</li>
+                <li>没入感は非常に高い</li>
+                <li>ただし実装難度とUI依存が高く、初期開発向きではない</li>
+              </ul>
+            </article>
+            <article class="card">
+              <h3>スタイルB: 自律型AIクルーとパイプライン管理型</h3>
+              <ul>
+                <li>プレイヤーは命令とSOPを定義し、クルーが半自律で動く</li>
+                <li>非常時だけプレイヤーがオーバーライドする</li>
+                <li>役職間連携をシステムとして表現しやすい</li>
+                <li>長期的には非常に良いが、まずは基礎ロジックの整備が必要</li>
+              </ul>
+            </article>
+            <article class="card">
+              <h3>スタイルC: データ駆動・ハードコア演算型</h3>
+              <ul>
+                <li>ソナー、TDC、雷撃諸元をプレイヤー自身が詰める</li>
+                <li>命中時の達成感が大きい</li>
+                <li>ただし入口が硬すぎるとプレイヤーを選ぶ</li>
+              </ul>
+            </article>
+            <article class="card">
+              <h3>推奨方針</h3>
+              <p><code>スタイルB を土台にしつつ、雷撃だけスタイルCへ寄せる</code> 方向が最も合う。</p>
+              <ul>
+                <li>Uボートらしさの核は各部署の連携にある</li>
+                <li>現在の <code>Command Chain</code> と役職タブ設計と相性が良い</li>
+                <li>雷撃だけハードコア寄りにすると役職差が立つ</li>
+                <li>スタイルAは魅力的だが、後付けの拡張要素として扱うのが安全</li>
+              </ul>
+            </article>
+          </div>
+          <div class="card" style="margin-top:16px;">
+            <h3>具体的なゲームデザイン提案</h3>
+            <ul>
+              <li>基本ループは <code>艦長が命令 -> 各部署が半自律で実行 -> 必要時に役職切替して介入</code></li>
+              <li>緊急時だけ <code>急速潜航フェーズ</code> のような手動密度の高い局面を作る</li>
+              <li>雷撃席では <code>距離 / AOB / 進角 / 信管 / 注水 / 同期</code> を段階化し、ハードコア寄りにする</li>
+              <li>ソナー席はヘッドホン前提の主役席として強化する</li>
+              <li>戦略層として後から <code>通信</code> <code>群狼作戦</code> <code>補給</code> <code>損傷修理</code> を積み増す</li>
+            </ul>
+          </div>
+        </section>
+
+        <section class="section">
+          <h2>ドイツ語復唱テンプレート仕様</h2>
+          <h3>基本方針</h3>
+          <ul>
+            <li>艦内の命令復唱は、まず <code>テンプレート固定文</code> で実装する</li>
+            <li>重要操作は <code>艦長命令 -> 復唱 -> 実行報告</code> の3段構成にする</li>
+            <li>ドイツ語は雰囲気重視だが、短く、聞き取りやすく、役割が分かる定型文を優先する</li>
+            <li>LLMは初期段階では使わず、まずは安定したテンプレートテーブルで運用する</li>
+          </ul>
+
+          <h3>復唱イベント構造</h3>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>フィールド</th>
+                  <th>用途</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr><td><code>speakerRole</code></td><td>話者の役職。例: <code>captain</code>, <code>sonar</code>, <code>torpedo</code>, <code>engineer</code>, <code>watch</code></td></tr>
+                <tr><td><code>trigger</code></td><td>発話の発火条件。例: <code>alarm_dive_start</code>, <code>torpedo_ready</code></td></tr>
+                <tr><td><code>germanText</code></td><td>実際に読み上げるドイツ語</td></tr>
+                <tr><td><code>japaneseGloss</code></td><td>UI確認用の日本語意味</td></tr>
+                <tr><td><code>priority</code></td><td><code>normal</code>, <code>high</code>, <code>critical</code></td></tr>
+                <tr><td><code>voiceStyle</code></td><td>声色識別用。例: <code>officer</code>, <code>petty_officer</code>, <code>engine_room</code></td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <h3>艦長命令テンプレート</h3>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>トリガー</th>
+                  <th>ドイツ語</th>
+                  <th>日本語意味</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr><td>急速潜航開始</td><td><code>Alarm! Tauchen!</code></td><td>アラーム、潜航</td></tr>
+                <tr><td>戦闘配置</td><td><code>Gefechtsstationen einnehmen!</code></td><td>戦闘配置につけ</td></tr>
+                <tr><td>静粛潜航</td><td><code>Ruhe im Boot. Lautlose Fahrt!</code></td><td>艦内静粛、静粛航行</td></tr>
+                <tr><td>潜望鏡深度</td><td><code>Auf Sehrohrtiefe gehen!</code></td><td>潜望鏡深度へ</td></tr>
+                <tr><td>指定深度</td><td><code>Tiefe fünfzehn Meter!</code></td><td>深度15メートル</td></tr>
+                <tr><td>雷撃準備</td><td><code>Rohr eins bis drei klarmachen!</code></td><td>発射管1番から3番を用意</td></tr>
+                <tr><td>発射</td><td><code>Los! Torpedo los!</code></td><td>発射</td></tr>
+                <tr><td>回避</td><td><code>Hart Steuerbord! Tiefer gehen!</code></td><td>面舵いっぱい、さらに潜れ</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <h3>各部署の復唱テンプレート</h3>
+          <div class="grid two">
+            <article class="card">
+              <h3>見張り・当直</h3>
+              <ul>
+                <li><code>Flugzeug an Backbord!</code> 左舷に航空機</li>
+                <li><code>Zerstörer voraus!</code> 前方に駆逐艦</li>
+                <li><code>Alarmtauchen! Jawohl!</code> 急速潜航、了解</li>
+                <li><code>Turmluk geschlossen!</code> 司令塔ハッチ閉鎖完了</li>
+              </ul>
+            </article>
+            <article class="card">
+              <h3>機関部</h3>
+              <ul>
+                <li><code>Diesel stoppen!</code> ディーゼル停止</li>
+                <li><code>E-Maschinen laufen!</code> 電動機始動</li>
+                <li><code>Luftklappen dicht!</code> 吸排気弁閉鎖完了</li>
+                <li><code>Bilgepumpe läuft!</code> ビルジポンプ作動中</li>
+              </ul>
+            </article>
+            <article class="card">
+              <h3>航海長・発令所</h3>
+              <ul>
+                <li><code>Tiefe erreicht!</code> 指定深度到達</li>
+                <li><code>Sehrohrtiefe gehalten!</code> 潜望鏡深度保持</li>
+                <li><code>Boot liegt gut im Trimm.</code> 艦姿勢良好</li>
+                <li><code>Neuer Kurs liegt an!</code> 新針路に乗った</li>
+              </ul>
+            </article>
+            <article class="card">
+              <h3>ソナー員</h3>
+              <ul>
+                <li><code>Geräuschkontakt Steuerbord, vier fünf!</code> 右舷45度に音響接触</li>
+                <li><code>Schnelle Schraubengeräusche, vermutlich Zerstörer.</code> 高速スクリュー音、駆逐艦と思われる</li>
+                <li><code>Entfernung etwa zweitausend Meter.</code> 距離およそ2000メートル</li>
+                <li><code>Kontakt verloren.</code> 接触喪失</li>
+              </ul>
+            </article>
+            <article class="card">
+              <h3>雷撃士・水雷員</h3>
+              <ul>
+                <li><code>Rohr eins klar!</code> 1番発射管用意よし</li>
+                <li><code>Rohr fluten!</code> 発射管注水開始</li>
+                <li><code>Torpedodaten übernommen!</code> 雷撃データ同期完了</li>
+                <li><code>Torpedo läuft!</code> 魚雷走行中</li>
+              </ul>
+            </article>
+          </div>
+
+          <h3>復唱優先ルール</h3>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>優先度</th>
+                  <th>用途</th>
+                  <th>実装ルール</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr><td><code>critical</code></td><td>急速潜航、発見、発射、被弾</td><td>他の発話を中断して即時再生</td></tr>
+                <tr><td><code>high</code></td><td>深度変更、潜望鏡深度、護衛接近警報</td><td>現在の低優先発話を待って再生</td></tr>
+                <tr><td><code>normal</code></td><td>定常報告、姿勢報告、準備完了</td><td>キューに積んで順次再生</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <section class="section">
+          <h2>役職ごとの復唱ルール</h2>
+          <div class="grid two">
+            <article class="card">
+              <h3>艦長</h3>
+              <ul>
+                <li>艦長自身は基本的に <code>命令発話のみ</code></li>
+                <li>命令は短く、他部署の復唱を誘発するトリガーとして機能する</li>
+                <li>長文説明は音声ではなくUIログに出す</li>
+              </ul>
+            </article>
+            <article class="card">
+              <h3>ソナー員</h3>
+              <ul>
+                <li>接触探知時は <code>方位 -> 種別 -> 推定距離</code> の順で報告する</li>
+                <li>同一接触を短時間に何度も繰り返さない</li>
+                <li><code>駆逐艦</code> <code>高速接近</code> <code>接触喪失</code> は高優先度</li>
+              </ul>
+            </article>
+            <article class="card">
+              <h3>雷撃士</h3>
+              <ul>
+                <li><code>用意</code> <code>同期</code> <code>発射</code> <code>命中音確認待ち</code> の段階で報告する</li>
+                <li>発射前の報告にはできるだけ <code>Rohr番号</code> を含める</li>
+                <li>雷撃解が成立していない時は、不成立理由を簡潔に示す</li>
+              </ul>
+            </article>
+            <article class="card">
+              <h3>航海長</h3>
+              <ul>
+                <li>深度・針路・トリム状態の報告を担当する</li>
+                <li>急速潜航中は報告頻度を高める</li>
+                <li>定常時は変化があった時だけ短く報告する</li>
+              </ul>
+            </article>
+            <article class="card">
+              <h3>機関部</h3>
+              <ul>
+                <li>急速潜航と損傷時のみ前面に出す</li>
+                <li><code>停止完了</code> <code>切替完了</code> <code>閉鎖完了</code> など結果報告を明確にする</li>
+              </ul>
+            </article>
+            <article class="card">
+              <h3>発話頻度制御</h3>
+              <ul>
+                <li>同じ話者が短時間に連続で喋りすぎないように <code>cooldown</code> を設ける</li>
+                <li><code>critical</code> イベントのみクールダウン無視</li>
+                <li>1イベントにつき <code>1命令 + 1復唱 + 1完了報告</code> を基本単位とする</li>
+              </ul>
+            </article>
+          </div>
+        </section>
+
+        <section class="section">
+          <h2>TTS実装方針</h2>
+          <h3>採用方針</h3>
+          <ul>
+            <li>初期実装は <code>ブラウザ標準TTS</code> を使う</li>
+            <li>Web Speech API の <code>speechSynthesis</code> を第一候補にする</li>
+            <li>音声生成はローカルブラウザ依存とし、サーバー側音声合成は後続対応にする</li>
+          </ul>
+
+          <h3>初期実装構成</h3>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>層</th>
+                  <th>実装内容</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr><td>命令イベント層</td><td>艦長命令や部署報告イベントを発火</td></tr>
+                <tr><td>テンプレート選択層</td><td>トリガーと役職から <code>germanText</code> を決定</td></tr>
+                <tr><td>音声キュー層</td><td>優先度順に発話キュー管理</td></tr>
+                <tr><td>再生層</td><td><code>speechSynthesis.speak()</code> で再生</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <h3>実装要件</h3>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>要件ID</th>
+                  <th>内容</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr><td>VO-01</td><td>ドイツ語復唱は <code>text</code> と <code>audio</code> の両方を持つ</td></tr>
+                <tr><td>VO-02</td><td>UIログにはドイツ語原文と日本語意味を併記できる</td></tr>
+                <tr><td>VO-03</td><td><code>critical</code> 発話は現在の通常発話を中断できる</td></tr>
+                <tr><td>VO-04</td><td>同一話者の連続発話にはクールダウンを入れる</td></tr>
+                <tr><td>VO-05</td><td>TTS無効時でもテキストログだけで成立する</td></tr>
+                <tr><td>VO-06</td><td>ユーザーが <code>音声ON/OFF</code> と <code>復唱頻度</code> を調整できる</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <h3>音声設定項目</h3>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>項目</th>
+                  <th>説明</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr><td><code>voiceEnabled</code></td><td>復唱音声の有効 / 無効</td></tr>
+                <tr><td><code>voiceLanguage</code></td><td>既定は <code>de-DE</code></td></tr>
+                <tr><td><code>voiceRate</code></td><td>話速</td></tr>
+                <tr><td><code>voicePitch</code></td><td>話者の高さ調整</td></tr>
+                <tr><td><code>voiceVolume</code></td><td>全体音量</td></tr>
+                <tr><td><code>voicePriorityDuck</code></td><td>ベルや爆雷音の下での自動音量調整</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <h3>話者ごとの音声方針</h3>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>役職</th>
+                  <th>音声イメージ</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr><td>艦長</td><td>低め、短く鋭い命令口調</td></tr>
+                <tr><td>ソナー員</td><td>中音域、やや早口、情報報告型</td></tr>
+                <tr><td>雷撃士</td><td>落ち着いた中低音、確認口調</td></tr>
+                <tr><td>航海長</td><td>明瞭、一定テンポ</td></tr>
+                <tr><td>機関部</td><td>低音、力強い短文</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <h3>実装段階</h3>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>段階</th>
+                  <th>内容</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr><td>Phase 1</td><td>テキスト復唱のみ</td></tr>
+                <tr><td>Phase 2</td><td>ブラウザTTSでドイツ語再生</td></tr>
+                <tr><td>Phase 3</td><td>優先度キュー、話者別音声調整</td></tr>
+                <tr><td>Phase 4</td><td>音声入力(STT)による艦長命令</td></tr>
+                <tr><td>Phase 5</td><td>LLMによる状況依存の可変復唱</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <p class="section-note">重要操作の発話は、初期段階では自由生成ではなくテンプレート固定を原則とする。</p>
+        </section>
+
+        <section class="section">
+          <h2>現行プロトとの差分</h2>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>現状</th>
+                  <th>足りない点</th>
+                  <th>次の実装</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr><td>役職タブ切替あり</td><td>急速潜航専用フェーズがない</td><td><code>Alarm!</code> 専用UIとタイマー追加</td></tr>
+                <tr><td>指揮系統UIあり</td><td>各部署タスク進行がまだ演出中心</td><td>実タスク状態と連動</td></tr>
+                <tr><td>潜望鏡 / 双眼鏡あり</td><td>観測値入力と連動していない</td><td>艦長観測値を雷撃解へ接続</td></tr>
+                <tr><td>ソナー音あり</td><td>護衛分類と警報が弱い</td><td>駆逐艦判別と警報イベント追加</td></tr>
+                <tr><td>雷撃解あり</td><td>注水・同期・発射管準備が未段階化</td><td>雷撃前手順を複数段階へ</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p class="section-note">このHTMLは <code>ROLE_SPEC.md</code> の内容をそのまま資料化したもの。</p>
+        </section>
+      </div>
+    </main>
+  </body>
+</html>

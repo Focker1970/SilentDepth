@@ -1,0 +1,478 @@
+<!DOCTYPE html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>SilentDepth ドイツ語音声実装仕様書</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        --bg-top: #05131d;
+        --bg-bottom: #102b3c;
+        --panel: rgba(7, 21, 31, 0.84);
+        --panel-border: rgba(139, 220, 241, 0.16);
+        --text: #edf8fb;
+        --muted: #a8c0cb;
+        --accent: #dffbff;
+        --accent-soft: #8bdcf1;
+        --warning: #ffd47b;
+        --good: #8cf3bb;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        min-height: 100vh;
+        font-family: "Avenir Next", "Hiragino Sans", sans-serif;
+        color: var(--text);
+        background:
+          radial-gradient(circle at top, rgba(139, 220, 241, 0.14), transparent 26%),
+          linear-gradient(180deg, var(--bg-bottom), var(--bg-top));
+      }
+      body::before {
+        content: "";
+        position: fixed;
+        inset: 0;
+        background-image:
+          linear-gradient(rgba(255, 255, 255, 0.03) 1px, transparent 1px),
+          linear-gradient(90deg, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
+        background-size: 42px 42px;
+        opacity: 0.16;
+        pointer-events: none;
+      }
+      main {
+        position: relative;
+        z-index: 1;
+        max-width: 1260px;
+        margin: 0 auto;
+        padding: 24px;
+      }
+      .hero, .section {
+        border: 1px solid var(--panel-border);
+        border-radius: 28px;
+        background: var(--panel);
+        backdrop-filter: blur(12px);
+        box-shadow: 0 24px 70px rgba(0, 0, 0, 0.28);
+      }
+      .hero { padding: 30px; }
+      .section { padding: 24px; }
+      .stack { display: grid; gap: 20px; margin-top: 20px; }
+      .eyebrow {
+        margin: 0 0 10px;
+        color: var(--accent-soft);
+        text-transform: uppercase;
+        letter-spacing: 0.18em;
+      }
+      h1, h2, h3, p { margin-top: 0; }
+      h1 { margin-bottom: 12px; font-size: clamp(2.2rem, 7vw, 4rem); line-height: 0.96; }
+      h2 { margin-bottom: 14px; font-size: 1.6rem; }
+      h3 { margin-bottom: 10px; font-size: 1.08rem; color: var(--accent); }
+      p, li { line-height: 1.8; color: var(--muted); }
+      ul, ol { margin: 0; padding-left: 22px; }
+      li + li { margin-top: 8px; }
+      code {
+        padding: 2px 6px;
+        border-radius: 8px;
+        background: rgba(255, 255, 255, 0.08);
+        color: var(--text);
+        font-family: "SFMono-Regular", Consolas, monospace;
+      }
+      .pill {
+        display: inline-block;
+        margin-top: 10px;
+        padding: 8px 12px;
+        border-radius: 999px;
+        background: rgba(139, 220, 241, 0.12);
+        color: var(--accent);
+      }
+      .grid {
+        display: grid;
+        gap: 16px;
+      }
+      .grid.two {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+      .card {
+        padding: 18px;
+        border-radius: 20px;
+        background: rgba(255, 255, 255, 0.04);
+        border: 1px solid rgba(255, 255, 255, 0.05);
+      }
+      .note { color: var(--warning); }
+      .good { color: var(--good); }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-top: 12px;
+        overflow: hidden;
+        border-radius: 18px;
+        background: rgba(255, 255, 255, 0.03);
+      }
+      th, td {
+        padding: 12px 14px;
+        text-align: left;
+        vertical-align: top;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+      }
+      th {
+        color: var(--accent);
+        background: rgba(139, 220, 241, 0.08);
+        font-weight: 700;
+      }
+      tr:last-child td { border-bottom: 0; }
+      .table-wrap { overflow-x: auto; }
+      @media (max-width: 900px) {
+        .grid.two { grid-template-columns: 1fr; }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <section class="hero">
+        <p class="eyebrow">SilentDepth German Voice Spec</p>
+        <h1>ドイツ語音声実装仕様書</h1>
+        <p>
+          <code>SilentDepth</code> において、艦内命令復唱、アラーム、雷撃準備、接触報告を
+          ドイツ語音声で再生するための実装仕様書。ブラウザ標準 TTS を基本とし、
+          将来的な録音音源・外部 TTS 置換も見据えた構成を前提にする。
+        </p>
+        <div class="pill">対象: Web Speech API / de-DE / 復唱テンプレート / イベント再生 / フォールバック</div>
+      </section>
+
+      <div class="stack">
+        <section class="section">
+          <h2>目的</h2>
+          <div class="grid two">
+            <article class="card">
+              <h3>演出目的</h3>
+              <ul>
+                <li>Uボート艦内の緊張感を音声で補強する</li>
+                <li>命令と復唱の関係をプレイヤーに体感させる</li>
+                <li>役職ごとの雰囲気差を声色、速度、間で出す</li>
+              </ul>
+            </article>
+            <article class="card">
+              <h3>ゲーム目的</h3>
+              <ul>
+                <li>重要イベントを音で即時に伝える</li>
+                <li>HUD を見なくても状況判断しやすくする</li>
+                <li>各部署の状態変化を音声レイヤーで補助する</li>
+              </ul>
+            </article>
+          </div>
+        </section>
+
+        <section class="section">
+          <h2>実装方針</h2>
+          <ol>
+            <li>初期実装は <code>speechSynthesis</code> によるブラウザ標準 TTS を使用する</li>
+            <li>音声言語は基本 <code>de-DE</code></li>
+            <li>各イベントは <code>speakerRole</code>, <code>priority</code>, <code>germanText</code>, <code>rate</code>, <code>pitch</code> を持つ</li>
+            <li>同時多発イベントはキューに積み、優先度順で再生する</li>
+            <li>将来は録音済み音声や外部 TTS に差し替え可能な抽象層を持つ</li>
+          </ol>
+        </section>
+
+        <section class="section">
+          <h2>音声システム構成</h2>
+          <div class="grid two">
+            <article class="card">
+              <h3>必要コンポーネント</h3>
+              <ul>
+                <li><code>voiceEnabled</code>: 音声再生トグル</li>
+                <li><code>voiceQueue</code>: 復唱待ちキュー</li>
+                <li><code>voiceBusy</code>: 再生中フラグ</li>
+                <li><code>lastVoiceAt</code>: スパム抑制用の最終再生記録</li>
+                <li><code>selectedGermanVoice</code>: 使用音声キャッシュ</li>
+              </ul>
+            </article>
+            <article class="card">
+              <h3>再生ルール</h3>
+              <ul>
+                <li>同一イベントの短時間連続発火は抑制する</li>
+                <li><code>critical</code> は通常キューより優先して前へ積む</li>
+                <li>ソナー音が鳴っていても復唱が埋もれないよう音量設計する</li>
+                <li>字幕テキストは常時 HUD / ログにも残す</li>
+              </ul>
+            </article>
+          </div>
+        </section>
+
+        <section class="section">
+          <h2>イベント一覧</h2>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>イベント</th>
+                  <th>用途</th>
+                  <th>重要度</th>
+                  <th>備考</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>alarmDiveStart</code></td>
+                  <td>Alarm 発令時</td>
+                  <td>critical</td>
+                  <td>ベル音と同時に再生</td>
+                </tr>
+                <tr>
+                  <td><code>alarmHatches</code></td>
+                  <td>ハッチ閉鎖完了</td>
+                  <td>high</td>
+                  <td>急速潜航進行用</td>
+                </tr>
+                <tr>
+                  <td><code>alarmEngines</code></td>
+                  <td>機関切替完了</td>
+                  <td>high</td>
+                  <td>ディーゼル停止、モーター移行</td>
+                </tr>
+                <tr>
+                  <td><code>alarmBallast</code></td>
+                  <td>主バラスト注水</td>
+                  <td>high</td>
+                  <td>潜航演出の中核</td>
+                </tr>
+                <tr>
+                  <td><code>alarmPlanes</code></td>
+                  <td>最大下げ角</td>
+                  <td>medium</td>
+                  <td>潜舵操作</td>
+                </tr>
+                <tr>
+                  <td><code>alarmDiveSuccess</code></td>
+                  <td>急速潜航成功</td>
+                  <td>high</td>
+                  <td>海中移行完了</td>
+                </tr>
+                <tr>
+                  <td><code>torpedoReady</code></td>
+                  <td>発射準備完了</td>
+                  <td>high</td>
+                  <td>Tube Ready 到達</td>
+                </tr>
+                <tr>
+                  <td><code>torpedoFire</code></td>
+                  <td>発射時</td>
+                  <td>critical</td>
+                  <td>短く鋭い復唱</td>
+                </tr>
+                <tr>
+                  <td><code>sonarContact</code></td>
+                  <td>接触捕捉</td>
+                  <td>medium</td>
+                  <td>スパム抑制必須</td>
+                </tr>
+                <tr>
+                  <td><code>damageReport</code></td>
+                  <td>被弾、浸水、損傷</td>
+                  <td>critical</td>
+                  <td>短文優先</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <section class="section">
+          <h2>ドイツ語セリフテンプレート</h2>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>役職</th>
+                  <th>イベント</th>
+                  <th>ドイツ語</th>
+                  <th>日本語意図</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>艦長</td>
+                  <td>Alarm 発令</td>
+                  <td><code>Alarm! Tauchen!</code></td>
+                  <td>アラーム、潜航</td>
+                </tr>
+                <tr>
+                  <td>見張り</td>
+                  <td>Alarm 復唱</td>
+                  <td><code>Alarmtauchen! Jawohl!</code></td>
+                  <td>急速潜航、了解</td>
+                </tr>
+                <tr>
+                  <td>見張り</td>
+                  <td>ハッチ閉鎖</td>
+                  <td><code>Turmluk geschlossen!</code></td>
+                  <td>艦橋ハッチ閉鎖</td>
+                </tr>
+                <tr>
+                  <td>機関</td>
+                  <td>機関切替</td>
+                  <td><code>Maschinen gestoppt! E-Maschinen laufen!</code></td>
+                  <td>機関停止、電動機運転</td>
+                </tr>
+                <tr>
+                  <td>機関長</td>
+                  <td>バラスト注水</td>
+                  <td><code>Hauptballast geflutet!</code></td>
+                  <td>主バラスト注水完了</td>
+                </tr>
+                <tr>
+                  <td>操舵</td>
+                  <td>潜舵下げ</td>
+                  <td><code>Beide Tiefenruder hart auf ab!</code></td>
+                  <td>潜舵最大下げ</td>
+                </tr>
+                <tr>
+                  <td>雷撃</td>
+                  <td>発射準備完了</td>
+                  <td><code>Rohr eins klar zum Schuss!</code></td>
+                  <td>一番発射管、発射準備完了</td>
+                </tr>
+                <tr>
+                  <td>艦長</td>
+                  <td>発射命令</td>
+                  <td><code>Los!</code></td>
+                  <td>撃て</td>
+                </tr>
+                <tr>
+                  <td>ソナー</td>
+                  <td>接触報告</td>
+                  <td><code>Schraubengeräusch, Steuerbord voraus!</code></td>
+                  <td>右舷前方にスクリュー音</td>
+                </tr>
+                <tr>
+                  <td>損害報告</td>
+                  <td>被害</td>
+                  <td><code>Wassereinbruch!</code></td>
+                  <td>浸水</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <section class="section">
+          <h2>話者別パラメータ</h2>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>speakerRole</th>
+                  <th>想定話者</th>
+                  <th>rate</th>
+                  <th>pitch</th>
+                  <th>方向性</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>captain</code></td>
+                  <td>艦長</td>
+                  <td>0.96 - 1.04</td>
+                  <td>0.86 - 0.96</td>
+                  <td>低めで断定的</td>
+                </tr>
+                <tr>
+                  <td><code>watch</code></td>
+                  <td>見張り / 当直</td>
+                  <td>1.02 - 1.12</td>
+                  <td>1.02 - 1.14</td>
+                  <td>素早く高め</td>
+                </tr>
+                <tr>
+                  <td><code>engineer</code></td>
+                  <td>機関員 / 機関長</td>
+                  <td>0.94 - 1.02</td>
+                  <td>0.84 - 0.94</td>
+                  <td>低く重い</td>
+                </tr>
+                <tr>
+                  <td><code>sonar</code></td>
+                  <td>ソナー手</td>
+                  <td>1.0 - 1.08</td>
+                  <td>0.96 - 1.02</td>
+                  <td>短く明瞭</td>
+                </tr>
+                <tr>
+                  <td><code>torpedo</code></td>
+                  <td>雷撃員</td>
+                  <td>0.98 - 1.06</td>
+                  <td>0.92 - 1.0</td>
+                  <td>確認口調</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <section class="section">
+          <h2>ブラウザ実装要件</h2>
+          <div class="grid two">
+            <article class="card">
+              <h3>最低限必要な処理</h3>
+              <ul>
+                <li><code>speechSynthesis.getVoices()</code> で <code>de-DE</code> を探索</li>
+                <li>最初のユーザー操作後に音声初期化</li>
+                <li>イベント発生時に <code>SpeechSynthesisUtterance</code> を生成</li>
+                <li>再生中とキュー状態を UI に反映</li>
+              </ul>
+            </article>
+            <article class="card">
+              <h3>注意点</h3>
+              <ul>
+                <li>環境によってドイツ語音声の有無が違う</li>
+                <li>macOS / Safari / Chrome で音声名が異なる</li>
+                <li>自動再生制限で初回無音になる可能性がある</li>
+                <li>TTS 品質は OS 依存で、軍艦的迫力は限定的</li>
+              </ul>
+            </article>
+          </div>
+        </section>
+
+        <section class="section">
+          <h2>フォールバック方針</h2>
+          <ol>
+            <li><code>de-DE</code> 音声が見つかる場合: ドイツ語 TTS で再生</li>
+            <li>ドイツ語音声がない場合: 同テキストを既定音声で再生、字幕に <code>DE</code> 表示</li>
+            <li>TTS 自体が使えない場合: 音声再生を無効化し、ログと字幕のみ表示</li>
+            <li>将来の高品質化: 事前収録音声または外部 TTS に差し替え</li>
+          </ol>
+        </section>
+
+        <section class="section">
+          <h2>ベル音の扱い</h2>
+          <div class="grid two">
+            <article class="card">
+              <h3>Alarm 演出</h3>
+              <ul>
+                <li><code>Alarm! Tauchen!</code> の直前にベル音を 1 回以上鳴らす</li>
+                <li>ベル音は TTS ではなく短い効果音で扱う</li>
+                <li>ベル音終了前に復唱を重ねてもよいが、音量バランスを取る</li>
+              </ul>
+            </article>
+            <article class="card">
+              <h3>実装案</h3>
+              <ul>
+                <li>軽量: <code>OscillatorNode</code> で簡易ベル音生成</li>
+                <li>標準: 小さな <code>.mp3</code> / <code>.wav</code> を同梱</li>
+                <li>優先順位は <code>ベル音 → 艦長命令 → 各部署復唱</code></li>
+              </ul>
+            </article>
+          </div>
+        </section>
+
+        <section class="section">
+          <h2>将来拡張</h2>
+          <ul>
+            <li>役職ごとに別ボイスを割り当てる</li>
+            <li>AI 艦長の判断文もドイツ語で生成し、短文化して読み上げる</li>
+            <li>駆逐艦側の英語音声通信を別レイヤーで混ぜる</li>
+            <li>字幕パネルをつけて <code>German / 日本語意図</code> を同時表示する</li>
+          </ul>
+        </section>
+      </div>
+    </main>
+  </body>
+</html>
