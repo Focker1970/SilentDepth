@@ -4342,9 +4342,16 @@ function updateHud() {
     torpedoReserveCountNode.textContent = `${sub.reserveTorpedoes || 0} 本`;
   }
   if (torpedoPostStatusNode) {
-    torpedoPostStatusNode.textContent = state.torpedoSequence.postFireRemaining > 0
-      ? `排水・再整列 ${state.torpedoSequence.postFireRemaining.toFixed(1)}s`
-      : "なし";
+    const nextImpactTorpedo = [...state.torpedoesInWater]
+      .filter((torpedo) => (torpedo.interceptCountdown ?? 0) > 0)
+      .sort((a, b) => (a.interceptCountdown ?? Infinity) - (b.interceptCountdown ?? Infinity))[0] || null;
+    torpedoPostStatusNode.textContent = nextImpactTorpedo
+      ? state.torpedoSequence.postFireRemaining > 0
+        ? `会敵まで ${nextImpactTorpedo.interceptCountdown.toFixed(1)}s / 排水・再整列 ${state.torpedoSequence.postFireRemaining.toFixed(1)}s`
+        : `会敵まで ${nextImpactTorpedo.interceptCountdown.toFixed(1)}s`
+      : state.torpedoSequence.postFireRemaining > 0
+        ? `排水・再整列 ${state.torpedoSequence.postFireRemaining.toFixed(1)}s`
+        : "なし";
   }
 
   sonarReportDetailNode.textContent = state.sonarContacts.length
@@ -5109,6 +5116,7 @@ function fireTorpedo() {
     traveled: 0,
     targetId: target.contact.id,
     life: fireLife,
+    interceptCountdown: target.interceptTime,
     hitChance: computeTorpedoHitChance(target, usesTDC)
   });
   addLog(
@@ -5529,6 +5537,7 @@ function updateTorpedoes(deltaTime) {
   const nextTorpedoes = [];
 
   for (const torpedo of state.torpedoesInWater) {
+    torpedo.interceptCountdown = Math.max(0, (torpedo.interceptCountdown ?? 0) - deltaTime);
     const previous = { x: torpedo.x, y: torpedo.y };
     const step = torpedo.speed * deltaTime;
     torpedo.x += Math.cos(toRadians(torpedo.heading)) * step;
