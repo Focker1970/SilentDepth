@@ -6682,7 +6682,7 @@ function drawNavigationMainPlot() {
   }
 
   ctx.fillStyle = "rgba(2, 11, 17, 0.46)";
-  ctx.fillRect(18, 16, 430, 88);
+  ctx.fillRect(18, 16, 448, 104);
   ctx.fillStyle = "#dffaff";
   ctx.font = "13px Avenir Next, Hiragino Sans, sans-serif";
   ctx.fillText("Station: 航海長席 / Navigation Plot", 32, 40);
@@ -6699,9 +6699,9 @@ function drawNavigationMainPlot() {
       ? `具申 針路 ${formatHeading(advice.heading)} / 速力 ${advice.speed.toFixed(1)}kt`
       : "有効接触なし",
     32,
-    92
+    112
   );
-  ctx.fillText(`縮尺 ±${NAV_PLOT_RANGE_X}m / ${NAV_PLOT_RANGE_Y}m`, width - 220, 40);
+  ctx.fillText(`縮尺 ±${NAV_PLOT_RANGE_X}m / ${NAV_PLOT_RANGE_Y}m`, width - 236, 40);
   ctx.restore();
 }
 
