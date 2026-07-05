@@ -4412,8 +4412,8 @@ function updateHud() {
           )} 方位 ${Math.round(entry.relBearing)} 度 / 強度 ${Math.round(entry.strength * 100)}% / ${
             intel.brief
           }${observed?.rangeBand ? ` / ${observed.rangeBand}` : ""}${
-            observed?.estimatedSpeed !== null ? ` / ${observed.estimatedSpeed.toFixed(1)}kt` : ""
-          }${observed?.estimatedHeading !== null ? ` / ${formatHeading(observed.estimatedHeading)}` : ""}${typeLabel}</div>${sonarStageGaugeMarkup(
+            observed?.estimatedSpeed != null ? ` / ${observed.estimatedSpeed.toFixed(1)}kt` : ""
+          }${observed?.estimatedHeading != null ? ` / ${formatHeading(observed.estimatedHeading)}` : ""}${typeLabel}</div>${sonarStageGaugeMarkup(
             intel.stage
           )}</li>`;
         })
