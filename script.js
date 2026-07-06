@@ -2644,6 +2644,10 @@ function randomCenteredOffset(range) {
   return randomRange(-range, range);
 }
 
+function chooseRandom(options) {
+  return options[Math.floor(Math.random() * options.length)];
+}
+
 function rotateOffset(offset, angleDeg) {
   const radians = toRadians(angleDeg);
   const cos = Math.cos(radians);
@@ -2668,11 +2672,17 @@ function createStageFormation(anchor, baseHeading, members) {
 }
 
 function createTrainingStageContacts() {
+  const sector = chooseRandom([
+    { x: 3850, y: 4180, heading: 4 },
+    { x: 4580, y: 4520, heading: 12 },
+    { x: 5020, y: 3920, heading: -6 },
+    { x: 4260, y: 5050, heading: 18 }
+  ]);
   const anchor = {
-    x: 4350 + randomCenteredOffset(550),
-    y: 4480 + randomCenteredOffset(380)
+    x: sector.x + randomCenteredOffset(420),
+    y: sector.y + randomCenteredOffset(320)
   };
-  const heading = 8 + randomCenteredOffset(12);
+  const heading = sector.heading + randomCenteredOffset(10);
   return [
     createContact("convoy", {
       x: anchor.x,
@@ -2684,11 +2694,17 @@ function createTrainingStageContacts() {
 }
 
 function createDestroyerEscapeContacts() {
+  const sector = chooseRandom([
+    { x: 2860, y: 5480, heading: -22 },
+    { x: 3320, y: 5090, heading: -8 },
+    { x: 3460, y: 5660, heading: -34 },
+    { x: 2740, y: 5180, heading: 2 }
+  ]);
   const anchor = {
-    x: 3100 + randomCenteredOffset(320),
-    y: 5250 + randomCenteredOffset(260)
+    x: sector.x + randomCenteredOffset(260),
+    y: sector.y + randomCenteredOffset(220)
   };
-  const heading = -18 + randomCenteredOffset(16);
+  const heading = sector.heading + randomCenteredOffset(12);
   return [
     createContact("escort", {
       x: anchor.x,
@@ -2702,12 +2718,19 @@ function createDestroyerEscapeContacts() {
 }
 
 function createConvoyAssaultContacts() {
+  const sector = chooseRandom([
+    { x: 7420, y: 2740, heading: 16 },
+    { x: 7920, y: 2460, heading: 8 },
+    { x: 8320, y: 2280, heading: 2 },
+    { x: 7680, y: 3020, heading: 20 }
+  ]);
   const anchor = {
-    x: 7850 + randomCenteredOffset(520),
-    y: 2500 + randomCenteredOffset(360)
+    x: sector.x + randomCenteredOffset(420),
+    y: sector.y + randomCenteredOffset(280)
   };
-  const heading = 9 + randomCenteredOffset(8);
-  const formationJitter = 90;
+  const heading = sector.heading + randomCenteredOffset(6);
+  const formationJitter = 120;
+  const lateralMirror = Math.random() < 0.5 ? -1 : 1;
   return createStageFormation(anchor, heading, [
     {
       type: "flagship",
@@ -2716,23 +2739,35 @@ function createConvoyAssaultContacts() {
     },
     {
       type: "convoy",
-      offset: { x: 260 + randomCenteredOffset(formationJitter), y: 180 + randomCenteredOffset(formationJitter) },
+      offset: {
+        x: 280 + randomCenteredOffset(formationJitter),
+        y: lateralMirror * (220 + randomCenteredOffset(formationJitter))
+      },
       headingOffset: randomCenteredOffset(4)
     },
     {
       type: "convoy",
-      offset: { x: 520 + randomCenteredOffset(formationJitter), y: -120 + randomCenteredOffset(formationJitter) },
+      offset: {
+        x: 610 + randomCenteredOffset(formationJitter),
+        y: lateralMirror * (-160 + randomCenteredOffset(formationJitter))
+      },
       headingOffset: randomCenteredOffset(4)
     },
     {
       type: "escort",
-      offset: { x: -420 + randomCenteredOffset(formationJitter), y: 360 + randomCenteredOffset(formationJitter) },
+      offset: {
+        x: -520 + randomCenteredOffset(formationJitter),
+        y: lateralMirror * (420 + randomCenteredOffset(formationJitter))
+      },
       headingOffset: randomCenteredOffset(6),
       speed: randomRange(4.4, 5.2)
     },
     {
       type: "escort",
-      offset: { x: 760 + randomCenteredOffset(formationJitter), y: -360 + randomCenteredOffset(formationJitter) },
+      offset: {
+        x: 870 + randomCenteredOffset(formationJitter),
+        y: lateralMirror * (-420 + randomCenteredOffset(formationJitter))
+      },
       headingOffset: randomCenteredOffset(6),
       speed: randomRange(4.4, 5.2)
     }
