@@ -2640,6 +2640,105 @@ function createContact(type, overrides = {}) {
   };
 }
 
+function randomCenteredOffset(range) {
+  return randomRange(-range, range);
+}
+
+function rotateOffset(offset, angleDeg) {
+  const radians = toRadians(angleDeg);
+  const cos = Math.cos(radians);
+  const sin = Math.sin(radians);
+  return {
+    x: offset.x * cos - offset.y * sin,
+    y: offset.x * sin + offset.y * cos
+  };
+}
+
+function createStageFormation(anchor, baseHeading, members) {
+  return members.map(({ type, offset, headingOffset = 0, speed, ...overrides }) => {
+    const rotated = rotateOffset(offset, baseHeading);
+    return createContact(type, {
+      x: anchor.x + rotated.x,
+      y: anchor.y + rotated.y,
+      heading: normalizeAngle(baseHeading + headingOffset),
+      ...(speed != null ? { speed } : {}),
+      ...overrides
+    });
+  });
+}
+
+function createTrainingStageContacts() {
+  const anchor = {
+    x: 4350 + randomCenteredOffset(550),
+    y: 4480 + randomCenteredOffset(380)
+  };
+  const heading = 8 + randomCenteredOffset(12);
+  return [
+    createContact("convoy", {
+      x: anchor.x,
+      y: anchor.y,
+      heading,
+      speed: randomRange(2.3, 2.9)
+    })
+  ];
+}
+
+function createDestroyerEscapeContacts() {
+  const anchor = {
+    x: 3100 + randomCenteredOffset(320),
+    y: 5250 + randomCenteredOffset(260)
+  };
+  const heading = -18 + randomCenteredOffset(16);
+  return [
+    createContact("escort", {
+      x: anchor.x,
+      y: anchor.y,
+      heading,
+      speed: randomRange(5.4, 6.1),
+      alert: randomRange(0.72, 0.84),
+      chaseModeTimer: randomRange(75, 105)
+    })
+  ];
+}
+
+function createConvoyAssaultContacts() {
+  const anchor = {
+    x: 7850 + randomCenteredOffset(520),
+    y: 2500 + randomCenteredOffset(360)
+  };
+  const heading = 9 + randomCenteredOffset(8);
+  const formationJitter = 90;
+  return createStageFormation(anchor, heading, [
+    {
+      type: "flagship",
+      offset: { x: randomCenteredOffset(formationJitter), y: randomCenteredOffset(formationJitter) },
+      headingOffset: randomCenteredOffset(3)
+    },
+    {
+      type: "convoy",
+      offset: { x: 260 + randomCenteredOffset(formationJitter), y: 180 + randomCenteredOffset(formationJitter) },
+      headingOffset: randomCenteredOffset(4)
+    },
+    {
+      type: "convoy",
+      offset: { x: 520 + randomCenteredOffset(formationJitter), y: -120 + randomCenteredOffset(formationJitter) },
+      headingOffset: randomCenteredOffset(4)
+    },
+    {
+      type: "escort",
+      offset: { x: -420 + randomCenteredOffset(formationJitter), y: 360 + randomCenteredOffset(formationJitter) },
+      headingOffset: randomCenteredOffset(6),
+      speed: randomRange(4.4, 5.2)
+    },
+    {
+      type: "escort",
+      offset: { x: 760 + randomCenteredOffset(formationJitter), y: -360 + randomCenteredOffset(formationJitter) },
+      headingOffset: randomCenteredOffset(6),
+      speed: randomRange(4.4, 5.2)
+    }
+  ]);
+}
+
 const STAGES = [
   {
     id: "training_shot",
@@ -2663,9 +2762,7 @@ const STAGES = [
           targetDepth: 15
         },
         escapeZone: { x: 10800, y: 6400, radius: 320 },
-        contacts: [
-          createContact("convoy", { x: 4350, y: 4480, heading: 8, speed: 2.6 })
-        ]
+        contacts: createTrainingStageContacts()
       };
     },
     evaluate(state) {
@@ -2705,16 +2802,7 @@ const STAGES = [
           detection: 0.38
         },
         escapeZone: { x: 10450, y: 1700, radius: 360 },
-        contacts: [
-          createContact("escort", {
-            x: 3100,
-            y: 5250,
-            heading: -18,
-            speed: 5.8,
-            alert: 0.78,
-            chaseModeTimer: 90
-          })
-        ]
+        contacts: createDestroyerEscapeContacts()
       };
     },
     evaluate(state) {
@@ -2751,13 +2839,7 @@ const STAGES = [
           detection: 0.1
         },
         escapeZone: { ...DEFAULT_ESCAPE_ZONE },
-        contacts: [
-          createContact("flagship", { x: 7600, y: 2500, heading: 10 }),
-          createContact("convoy", { x: 7850, y: 2680, heading: 8 }),
-          createContact("convoy", { x: 8120, y: 2380, heading: 12 }),
-          createContact("escort", { x: 7250, y: 2860, heading: 16 }),
-          createContact("escort", { x: 8450, y: 2140, heading: 4 })
-        ]
+        contacts: createConvoyAssaultContacts()
       };
     },
     evaluate(state) {
