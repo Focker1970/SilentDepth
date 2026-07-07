@@ -55,80 +55,6 @@
       </header>
 
       <div class="layout">
-        <aside class="panel left-column">
-          <section class="hero-card">
-            <p class="eyebrow">Captain Overview</p>
-            <p class="description">
-              第二次世界大戦の北大西洋。Uボート艦内で艦長、ソナー員、雷撃士、航海長の席を切り替え、連合軍コンボイを追って戦果を挙げる。
-            </p>
-            <div class="mission-card">
-              <span class="label">Mission</span>
-              <p id="mission-text"></p>
-            </div>
-            <div class="mission-card">
-              <span class="label">Stage Progress</span>
-              <p id="stage-progress">Stage 1 / 3</p>
-            </div>
-          </section>
-
-          <section class="stats-grid">
-            <article class="stat-card">
-              <span class="label">Hull</span>
-              <strong id="hull">100%</strong>
-            </article>
-            <article class="stat-card">
-              <span class="label">Battery</span>
-              <strong id="battery">100%</strong>
-            </article>
-            <article class="stat-card">
-              <span class="label">Depth</span>
-              <strong id="depth">60m</strong>
-            </article>
-            <article class="stat-card">
-              <span class="label">Speed</span>
-              <strong id="speed">3kt</strong>
-            </article>
-            <article class="stat-card">
-              <span class="label">Noise</span>
-              <strong id="noise">Low</strong>
-            </article>
-            <article class="stat-card">
-              <span class="label">Torpedoes</span>
-              <strong id="torpedoes">5+9</strong>
-            </article>
-          </section>
-
-          <section class="status-card station-meta">
-            <span class="label">Current Station</span>
-            <strong id="station-name">艦長席</strong>
-            <p id="station-description" class="support-text"></p>
-          </section>
-
-          <section class="status-card phase-meta">
-            <span class="label">Battle Phase</span>
-            <strong id="phase-name">平常監視</strong>
-            <p id="phase-description" class="support-text"></p>
-          </section>
-
-          <section class="console-card command-chain-card">
-            <span class="label">Command Chain</span>
-            <div class="chain-head">
-              <strong id="captain-order">艦長命令: 接敵準備</strong>
-              <span id="command-priority" class="priority-pill">通常</span>
-            </div>
-            <ul class="chain-list">
-              <li><span>ソナー員</span><strong id="sonar-report-brief">受動聴音を継続</strong></li>
-              <li><span>雷撃士</span><strong id="torpedo-report-brief">射撃諸元を待機</strong></li>
-              <li><span>航海長</span><strong id="navigation-report-brief">現針路を維持</strong></li>
-            </ul>
-          </section>
-
-          <section class="status-card status-brief">
-            <span class="label">Command Status</span>
-            <p id="status" class="status"></p>
-          </section>
-        </aside>
-
         <section class="panel center-column">
           <div class="topbar">
             <div>
@@ -291,6 +217,26 @@
         </section>
 
         <aside class="panel right-column">
+          <div class="visually-hidden" aria-hidden="true">
+            <p id="mission-text"></p>
+            <p id="stage-progress">Stage 1 / 3</p>
+            <strong id="depth">60m</strong>
+            <strong id="speed">3kt</strong>
+            <strong id="noise">Low</strong>
+            <strong id="torpedoes">5+9</strong>
+            <strong id="station-name">艦長席</strong>
+            <p id="station-description"></p>
+            <strong id="phase-name">平常監視</strong>
+            <p id="phase-description"></p>
+            <strong id="captain-order">艦長命令: 接敵準備</strong>
+            <span id="command-priority" class="priority-pill">通常</span>
+            <strong id="sonar-report-brief">受動聴音を継続</strong>
+            <strong id="torpedo-report-brief">射撃諸元を待機</strong>
+            <strong id="navigation-report-brief">現針路を維持</strong>
+            <p id="status" class="status"></p>
+            <p id="navigation-summary"></p>
+          </div>
+
           <div class="log-head">
             <div>
               <p class="eyebrow">U-Boat Interior Console</p>
@@ -306,6 +252,19 @@
                 <div><dt>主要操作</dt><dd id="captain-ops">意図命令、観測、雷撃許可</dd></div>
                 <div><dt>最新報告</dt><dd id="captain-report">全部署から接敵準備の報告を受領。</dd></div>
               </dl>
+            </div>
+            <div class="console-card captain-vitals-card">
+              <span class="label">Boat Status</span>
+              <div class="captain-vitals-grid">
+                <article class="stat-card">
+                  <span class="label">Hull</span>
+                  <strong id="hull">100%</strong>
+                </article>
+                <article class="stat-card">
+                  <span class="label">Battery</span>
+                  <strong id="battery">100%</strong>
+                </article>
+              </div>
             </div>
             <div class="control-card">
               <span class="label">Command Orders</span>
