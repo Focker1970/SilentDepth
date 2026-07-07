@@ -4370,7 +4370,7 @@ function updateHud() {
       : "意図命令、観測、命令優先度の調整";
   captainReportNode.textContent = `${state.command.captainOrder} / 優先度 ${state.command.priorityLabel}`;
   if (captainAlarmCardNode) {
-    captainAlarmCardNode.style.display = state.alarmDive.active ? "" : "none";
+    captainAlarmCardNode.style.display = state.alarmDive.active ? "block" : "none";
   }
   alarmStateNode.textContent = state.alarmDive.active
     ? "急速潜航中"
