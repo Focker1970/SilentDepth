@@ -214,6 +214,24 @@
               <p id="hud-acoustic-note" class="support-text">ヘッドホン監視を継続。</p>
             </article>
           </div>
+
+          <div class="console-card alarm-card center-alarm-card" id="captain-alarm-card" hidden>
+            <span class="label">Alarm Dive</span>
+            <div class="alarm-head">
+              <strong id="alarm-state">待機</strong>
+              <span id="alarm-timer" class="alarm-timer">30.0s</span>
+            </div>
+            <p id="alarm-summary" class="support-text">
+              浮上中に敵航空機や駆逐艦に発見された際、30秒以内に完全潜航を完了させる。
+            </p>
+            <dl class="duty-list compact-duty">
+              <div><dt>進行</dt><dd id="alarm-progress">0 / 5</dd></div>
+              <div><dt>予想結果</dt><dd id="alarm-outlook">通常</dd></div>
+              <div><dt>部署練度</dt><dd id="alarm-skill-summary">標準</dd></div>
+              <div><dt>進行方式</dt><dd>自動</dd></div>
+            </dl>
+            <ul id="alarm-task-list" class="alarm-task-list"></ul>
+          </div>
         </section>
 
         <aside class="panel right-column">
@@ -301,23 +319,6 @@
                   <button type="button" id="surface-attack-egress">水上離脱</button>
                 </div>
               </div>
-            </div>
-            <div class="console-card alarm-card" id="captain-alarm-card" hidden>
-              <span class="label">Alarm Dive</span>
-              <div class="alarm-head">
-                <strong id="alarm-state">待機</strong>
-                <span id="alarm-timer" class="alarm-timer">30.0s</span>
-              </div>
-              <p id="alarm-summary" class="support-text">
-                浮上中に敵航空機や駆逐艦に発見された際、30秒以内に完全潜航を完了させる。
-              </p>
-              <dl class="duty-list compact-duty">
-                <div><dt>進行</dt><dd id="alarm-progress">0 / 5</dd></div>
-                <div><dt>予想結果</dt><dd id="alarm-outlook">通常</dd></div>
-                <div><dt>部署練度</dt><dd id="alarm-skill-summary">標準</dd></div>
-                <div><dt>進行方式</dt><dd>自動</dd></div>
-              </dl>
-              <ul id="alarm-task-list" class="alarm-task-list"></ul>
             </div>
             <div class="console-card">
               <span class="label">Captain Notes</span>
