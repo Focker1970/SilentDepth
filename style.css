@@ -378,7 +378,6 @@ h2 {
 .plot-stage,
 .tactical-strip {
   width: 100%;
-  max-width: 1360px;
   margin-left: auto;
   margin-right: auto;
 }
@@ -470,7 +469,6 @@ button.dim {
 .plot-frame {
   position: relative;
   width: 100%;
-  max-width: 1280px;
   margin: 0 auto;
   padding: 14px 14px 42px;
   border-radius: 26px;
