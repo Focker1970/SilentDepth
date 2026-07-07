@@ -84,107 +84,107 @@
                 <canvas id="theatre-plot-canvas" width="230" height="180"></canvas>
                 <p id="theatre-plot-note" class="support-text">艦長用の広域海図。</p>
               </aside>
+              <aside class="console-card plot-side-card" id="periscope-measure-card" style="display:none">
+                <span class="label" id="optics-card-label">Periscope Measurement</span>
+                <p id="periscope-contact" class="support-text">焦点目標: なし</p>
+                <p id="periscope-guide" class="support-text">
+                  黄色の上線をマスト頂部へ、中央水平線を喫水線へ合わせる。Tab または艦影クリックで目標切替。
+                </p>
+                <div class="duty-list compact-duty">
+                  <div><dt>潜望鏡方位</dt><dd id="periscope-bearing">000°</dd></div>
+                  <div><dt>艦首基準</dt><dd id="periscope-relative">+0°</dd></div>
+                  <div><dt>見かけ高さ</dt><dd id="periscope-apparent">-- 目盛</dd></div>
+                  <div><dt>測距一致</dt><dd id="periscope-alignment">未照準</dd></div>
+                </div>
+                <div class="button-row triple" id="optics-turn-controls">
+                  <button type="button" id="periscope-left">左へ 10°</button>
+                  <button type="button" id="periscope-center">艦首正面</button>
+                  <button type="button" id="periscope-right">右へ 10°</button>
+                </div>
+                <div class="button-row triple" id="optics-zoom-controls">
+                  <button type="button" id="optics-zoom-wide">広角</button>
+                  <button type="button" id="optics-zoom-standard">標準</button>
+                  <button type="button" id="optics-zoom-zoom">高倍率</button>
+                </div>
+                <div id="periscope-type-row" style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+                  <span class="support-text" style="white-space:nowrap">艦種:</span>
+                  <select id="periscope-type-select" style="flex:1;background:#0a2233;color:#dffaff;border:1px solid #2a5566;padding:3px 6px;border-radius:4px">
+                    <option value="">-- 不明 --</option>
+                    <option value="convoy">商船</option>
+                    <option value="flagship">重要輸送船</option>
+                    <option value="escort">駆逐艦</option>
+                  </select>
+                </div>
+                <div id="periscope-reticle-row" style="display:flex;align-items:center;gap:6px;margin-bottom:6px">
+                  <span class="support-text">目盛り:</span>
+                  <strong id="reticle-reading" style="color:#dffaff">3.0</strong>
+                </div>
+                <div class="button-row triple" id="periscope-reticle-controls">
+                  <button type="button" id="reticle-dec">−0.5</button>
+                  <button type="button" id="reticle-reset">リセット</button>
+                  <button type="button" id="reticle-inc">+0.5</button>
+                </div>
+                <div class="button-row single" id="periscope-range-controls">
+                  <button type="button" id="range-measure">距離測定</button>
+                </div>
+                <p id="periscope-range-result" class="support-text">距離: 未測定</p>
+              </aside>
+              <aside class="console-card plot-side-card" id="tdc-card" style="display:none">
+                <span class="label">Torpedo Data Computer</span>
+                <dl class="duty-list compact-duty">
+                  <div>
+                    <dt>方位 Bearing</dt>
+                    <dd><strong id="tdc-bearing">---</strong>° <button type="button" id="tdc-sync-bearing" style="padding:2px 6px;font-size:11px">方位同期</button></dd>
+                  </div>
+                  <div>
+                    <dt>距離 Range</dt>
+                    <dd><strong id="tdc-range">---</strong>m <button type="button" id="tdc-sync-range" style="padding:2px 6px;font-size:11px">潜望鏡同期</button></dd>
+                  </div>
+                  <div>
+                    <dt>目標速力 Speed</dt>
+                    <dd>
+                      <button type="button" id="tdc-speed-dec" style="padding:2px 6px;font-size:11px">−</button>
+                      <strong id="tdc-speed">3.0</strong>kt
+                      <button type="button" id="tdc-speed-inc" style="padding:2px 6px;font-size:11px">+</button>
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>艦首角 AOB</dt>
+                    <dd>
+                      <button type="button" id="tdc-aob-dec" style="padding:2px 6px;font-size:11px">−5°</button>
+                      <strong id="tdc-aob">+90</strong>°
+                      <button type="button" id="tdc-aob-inc" style="padding:2px 6px;font-size:11px">+5°</button>
+                    </dd>
+                  </div>
+                </dl>
+                <div style="margin-top:10px;padding-top:10px;border-top:1px solid rgba(141,219,237,0.2)">
+                  <span class="support-text">観測補助</span>
+                  <dl class="duty-list compact-duty" style="margin-top:8px">
+                    <div>
+                      <dt>Speed 推定</dt>
+                      <dd><strong id="tdc-speed-suggest">---</strong>kt <button type="button" id="tdc-apply-speed" style="padding:2px 6px;font-size:11px">採用</button></dd>
+                    </div>
+                    <div>
+                      <dt>AOB 推定</dt>
+                      <dd><strong id="tdc-aob-suggest">---</strong>° <button type="button" id="tdc-apply-aob" style="padding:2px 6px;font-size:11px">採用</button></dd>
+                    </div>
+                  </dl>
+                  <p id="tdc-estimate-note" class="support-text" style="margin-top:8px">
+                    潜望鏡観測ログが不足。
+                  </p>
+                </div>
+                <div style="margin-top:8px;padding-top:8px;border-top:1px solid rgba(141,219,237,0.2);display:flex;align-items:center;gap:8px">
+                  <span class="support-text">TDC出力 進角:</span>
+                  <strong id="tdc-gyro">---</strong>°
+                  <span id="tdc-valid" style="font-size:12px">---</span>
+                </div>
+              </aside>
               <div class="screen-bezel">
                 <span>MK.IV Combat Table</span>
                 <span>Hydrophone Link</span>
                 <span>Gyro Solver</span>
               </div>
             </div>
-            <aside class="console-card plot-side-card" id="periscope-measure-card" style="display:none">
-              <span class="label" id="optics-card-label">Periscope Measurement</span>
-              <p id="periscope-contact" class="support-text">焦点目標: なし</p>
-              <p id="periscope-guide" class="support-text">
-                黄色の上線をマスト頂部へ、中央水平線を喫水線へ合わせる。Tab または艦影クリックで目標切替。
-              </p>
-              <div class="duty-list compact-duty">
-                <div><dt>潜望鏡方位</dt><dd id="periscope-bearing">000°</dd></div>
-                <div><dt>艦首基準</dt><dd id="periscope-relative">+0°</dd></div>
-                <div><dt>見かけ高さ</dt><dd id="periscope-apparent">-- 目盛</dd></div>
-                <div><dt>測距一致</dt><dd id="periscope-alignment">未照準</dd></div>
-              </div>
-              <div class="button-row triple" id="optics-turn-controls">
-                <button type="button" id="periscope-left">左へ 10°</button>
-                <button type="button" id="periscope-center">艦首正面</button>
-                <button type="button" id="periscope-right">右へ 10°</button>
-              </div>
-              <div class="button-row triple" id="optics-zoom-controls">
-                <button type="button" id="optics-zoom-wide">広角</button>
-                <button type="button" id="optics-zoom-standard">標準</button>
-                <button type="button" id="optics-zoom-zoom">高倍率</button>
-              </div>
-              <div id="periscope-type-row" style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
-                <span class="support-text" style="white-space:nowrap">艦種:</span>
-                <select id="periscope-type-select" style="flex:1;background:#0a2233;color:#dffaff;border:1px solid #2a5566;padding:3px 6px;border-radius:4px">
-                  <option value="">-- 不明 --</option>
-                  <option value="convoy">商船</option>
-                  <option value="flagship">重要輸送船</option>
-                  <option value="escort">駆逐艦</option>
-                </select>
-              </div>
-              <div id="periscope-reticle-row" style="display:flex;align-items:center;gap:6px;margin-bottom:6px">
-                <span class="support-text">目盛り:</span>
-                <strong id="reticle-reading" style="color:#dffaff">3.0</strong>
-              </div>
-              <div class="button-row triple" id="periscope-reticle-controls">
-                <button type="button" id="reticle-dec">−0.5</button>
-                <button type="button" id="reticle-reset">リセット</button>
-                <button type="button" id="reticle-inc">+0.5</button>
-              </div>
-              <div class="button-row single" id="periscope-range-controls">
-                <button type="button" id="range-measure">距離測定</button>
-              </div>
-              <p id="periscope-range-result" class="support-text">距離: 未測定</p>
-            </aside>
-            <aside class="console-card plot-side-card" id="tdc-card" style="display:none">
-              <span class="label">Torpedo Data Computer</span>
-              <dl class="duty-list compact-duty">
-                <div>
-                  <dt>方位 Bearing</dt>
-                  <dd><strong id="tdc-bearing">---</strong>° <button type="button" id="tdc-sync-bearing" style="padding:2px 6px;font-size:11px">方位同期</button></dd>
-                </div>
-                <div>
-                  <dt>距離 Range</dt>
-                  <dd><strong id="tdc-range">---</strong>m <button type="button" id="tdc-sync-range" style="padding:2px 6px;font-size:11px">潜望鏡同期</button></dd>
-                </div>
-                <div>
-                  <dt>目標速力 Speed</dt>
-                  <dd>
-                    <button type="button" id="tdc-speed-dec" style="padding:2px 6px;font-size:11px">−</button>
-                    <strong id="tdc-speed">3.0</strong>kt
-                    <button type="button" id="tdc-speed-inc" style="padding:2px 6px;font-size:11px">+</button>
-                  </dd>
-                </div>
-                <div>
-                  <dt>艦首角 AOB</dt>
-                  <dd>
-                    <button type="button" id="tdc-aob-dec" style="padding:2px 6px;font-size:11px">−5°</button>
-                    <strong id="tdc-aob">+90</strong>°
-                    <button type="button" id="tdc-aob-inc" style="padding:2px 6px;font-size:11px">+5°</button>
-                  </dd>
-                </div>
-              </dl>
-              <div style="margin-top:10px;padding-top:10px;border-top:1px solid rgba(141,219,237,0.2)">
-                <span class="support-text">観測補助</span>
-                <dl class="duty-list compact-duty" style="margin-top:8px">
-                  <div>
-                    <dt>Speed 推定</dt>
-                    <dd><strong id="tdc-speed-suggest">---</strong>kt <button type="button" id="tdc-apply-speed" style="padding:2px 6px;font-size:11px">採用</button></dd>
-                  </div>
-                  <div>
-                    <dt>AOB 推定</dt>
-                    <dd><strong id="tdc-aob-suggest">---</strong>° <button type="button" id="tdc-apply-aob" style="padding:2px 6px;font-size:11px">採用</button></dd>
-                  </div>
-                </dl>
-                <p id="tdc-estimate-note" class="support-text" style="margin-top:8px">
-                  潜望鏡観測ログが不足。
-                </p>
-              </div>
-              <div style="margin-top:8px;padding-top:8px;border-top:1px solid rgba(141,219,237,0.2);display:flex;align-items:center;gap:8px">
-                <span class="support-text">TDC出力 進角:</span>
-                <strong id="tdc-gyro">---</strong>°
-                <span id="tdc-valid" style="font-size:12px">---</span>
-              </div>
-            </aside>
           </div>
 
           <div class="tactical-strip">

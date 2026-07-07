@@ -510,13 +510,31 @@ button.dim {
   align-items: start;
 }
 
-.center-column.periscope-layout .plot-stage,
-.center-column.torpedo-layout .plot-stage {
-  grid-template-columns: minmax(0, 1fr) 320px;
+.plot-side-card {
+  position: absolute;
+  top: 22px;
+  right: 22px;
+  z-index: 3;
+  width: 330px;
+  max-height: calc(100% - 44px);
+  overflow: auto;
+  border: 1px solid rgba(139, 220, 241, 0.16);
+  background: rgba(3, 15, 22, 0.78);
+  box-shadow: 0 18px 36px rgba(0, 0, 0, 0.22);
+  backdrop-filter: blur(10px);
 }
 
-.plot-side-card {
-  align-self: stretch;
+#periscope-measure-card {
+  width: 350px;
+}
+
+#tdc-card {
+  width: 340px;
+}
+
+.center-column.periscope-layout #theatre-plot-card,
+.center-column.torpedo-layout #theatre-plot-card {
+  display: none;
 }
 
 canvas {
@@ -793,10 +811,6 @@ canvas {
     min-height: auto;
   }
 
-  .center-column.periscope-layout .plot-stage,
-  .center-column.torpedo-layout .plot-stage {
-    grid-template-columns: 1fr;
-  }
 }
 
 @media (max-width: 760px) {
