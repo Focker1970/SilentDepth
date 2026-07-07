@@ -169,7 +169,7 @@ body[data-light-condition="night"]::before {
 
 .layout {
   display: grid;
-  grid-template-columns: minmax(720px, 1fr) 380px;
+  grid-template-columns: minmax(860px, 1fr) 360px;
   gap: 18px;
   margin-top: 18px;
   min-height: calc(100vh - 140px);
@@ -378,7 +378,7 @@ h2 {
 .plot-stage,
 .tactical-strip {
   width: 100%;
-  max-width: 1220px;
+  max-width: 1360px;
   margin-left: auto;
   margin-right: auto;
 }
@@ -470,7 +470,7 @@ button.dim {
 .plot-frame {
   position: relative;
   width: 100%;
-  max-width: 1120px;
+  max-width: 1280px;
   margin: 0 auto;
   padding: 14px 14px 42px;
   border-radius: 26px;
@@ -531,7 +531,7 @@ canvas {
 }
 
 #screen {
-  aspect-ratio: 960 / 620;
+  aspect-ratio: 1160 / 740;
 }
 
 .screen-bezel {
