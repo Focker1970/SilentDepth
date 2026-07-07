@@ -2241,6 +2241,9 @@ function startAlarmDive(reason = "enemy_contact", autoTriggered = false) {
   emitGermanRepeater("alarmDiveStart");
   setStatus("Alarm! 急速潜航開始。各部署が自動手順へ移行。", "bad");
   state.alarmDiveCooldownUntil = state.time + 18;
+  if (captainAlarmCardNode) {
+    captainAlarmCardNode.style.display = "block";
+  }
   updateButtons();
 }
 
@@ -2304,6 +2307,9 @@ function resolveAlarmDive(success) {
   state.alarmDive.active = false;
   state.alarmDive.resolved = success ? "success" : "failure";
   state.alarmDiveCooldownUntil = Math.max(state.alarmDiveCooldownUntil || 0, state.time + 18);
+  if (captainAlarmCardNode) {
+    captainAlarmCardNode.style.display = "none";
+  }
   if (sub.hull <= 0) {
     state.running = false;
     state.battlePhase = BATTLE_PHASES.disabled;
