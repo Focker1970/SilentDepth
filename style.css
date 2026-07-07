@@ -185,6 +185,11 @@ body[data-light-condition="night"]::before {
   flex-direction: column;
 }
 
+.center-column {
+  display: flex;
+  flex-direction: column;
+}
+
 .hero-card {
   padding-bottom: 6px;
 }
@@ -368,6 +373,16 @@ h2 {
   gap: 12px;
 }
 
+.topbar,
+.station-tabs,
+.plot-stage,
+.tactical-strip {
+  width: 100%;
+  max-width: 1220px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
 .legend {
   display: flex;
   flex-wrap: wrap;
@@ -454,6 +469,9 @@ button.dim {
 
 .plot-frame {
   position: relative;
+  width: 100%;
+  max-width: 1120px;
+  margin: 0 auto;
   padding: 14px 14px 42px;
   border-radius: 26px;
   border: 1px solid rgba(139, 220, 241, 0.14);
@@ -510,6 +528,10 @@ canvas {
   background:
     radial-gradient(circle at 50% 12%, rgba(139, 220, 241, 0.18), transparent 24%),
     linear-gradient(180deg, #0a2536, #04141d);
+}
+
+#screen {
+  aspect-ratio: 960 / 620;
 }
 
 .screen-bezel {
