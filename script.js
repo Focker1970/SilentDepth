@@ -26,6 +26,7 @@ const hudTorpedoStatusNode = document.getElementById("hud-torpedo-status");
 const hudTorpedoNoteNode = document.getElementById("hud-torpedo-note");
 const hudAcousticModeNode = document.getElementById("hud-acoustic-mode");
 const hudAcousticNoteNode = document.getElementById("hud-acoustic-note");
+const captainAlarmCardNode = document.getElementById("captain-alarm-card");
 const alarmStateNode = document.getElementById("alarm-state");
 const alarmTimerNode = document.getElementById("alarm-timer");
 const alarmSummaryNode = document.getElementById("alarm-summary");
@@ -4368,6 +4369,9 @@ function updateHud() {
           ? "離脱針路の維持と護衛回避"
       : "意図命令、観測、命令優先度の調整";
   captainReportNode.textContent = `${state.command.captainOrder} / 優先度 ${state.command.priorityLabel}`;
+  if (captainAlarmCardNode) {
+    captainAlarmCardNode.style.display = state.alarmDive.active ? "" : "none";
+  }
   alarmStateNode.textContent = state.alarmDive.active
     ? "急速潜航中"
     : state.alarmDive.resolved === "success"
