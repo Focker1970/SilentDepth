@@ -507,7 +507,7 @@ function voiceAsset(fileName) {
 }
 const GERMAN_VOICE_FILES = {
   alarmDiveStart: [
-    voiceAsset("captain_alarm_tauchen.mp3"),
+    voiceAsset("captain_alarm_tauchen_alt.mp3"),
     voiceAsset("watch_alarmtauchen_jawohl.mp3")
   ],
   alarmHatches: [voiceAsset("watch_hatches_closed.mp3")],
