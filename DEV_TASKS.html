@@ -190,11 +190,11 @@
           <h3>現状メモ</h3>
           <ul>
             <li>Phase 0: 役職UIと指揮系統UIの基礎整理は完了</li>
-            <li>Phase 1: コア戦闘ループは概ね通るが、戦果判定と離脱条件が未完</li>
-            <li>Phase 2: 急速潜航の基礎は実装済み、演出と数値反映の詰めが残る</li>
-            <li>Phase 3: 録音音声導入は進んでいるが、テンプレート体系化とTTS整理が未完</li>
-            <li>Phase 4: 爆雷・静粛まわりの基礎はあるが、損傷系統化が未完</li>
-            <li>Phase 5: 仕様書とタスク分解は完了、実装はこれから</li>
+            <li>Phase 1: 接敵、観測、雷撃段階化、双眼鏡攻撃分岐までは実装済み。離脱条件と戦果判定が未完</li>
+            <li>Phase 2: Alarm Dive の自動進行と成否反映は実装済み。練度や演出の掘り下げが残る</li>
+            <li>Phase 3: 録音優先、TTS、テキストフォールバック、復唱テンプレートは実装済み。話者クールダウン等の整理が未完</li>
+            <li>Phase 4: 爆雷実体、静粛航行、深深度リスクは実装済み。系統損傷や応急修理が未完</li>
+            <li>Phase 5: ルールベースAI補助と音声キューは進行中。敵艦長AIの本格状態機械は未完</li>
             <li>Phase 6: 戦略層は未着手</li>
           </ul>
         </div>
@@ -242,7 +242,7 @@
             <li class="done">視認とソナーの両方で敵発見できるようにする</li>
             <li class="done">接触後に敵優位と自艦優位の分岐を入れる</li>
             <li class="done">潜航戦闘中の基本ループを作る</li>
-            <li>ソナー報告から接敵情報が更新されるようにする</li>
+            <li class="done">ソナー報告から接敵情報が更新されるようにする</li>
             <li class="done">航海長操作を戦術結果へ反映させる</li>
             <li class="done">雷撃シーケンスを段階化する</li>
             <li>離脱フェーズへの遷移条件を実装する</li>
@@ -253,13 +253,13 @@
           <h3>P2 タスク / 確認項目</h3>
           <ul class="checklist">
             <li>ミッション開始条件を時刻 / 海象 / 初期位置 / 目標種別で持たせる</li>
-            <li>接敵ごとに敵編成を変えられるようにする</li>
-            <li>フェーズ別のHUD文言を用意する</li>
-            <li><code>浮上双眼鏡攻撃</code> の <code>allowed / risky / blocked</code> 判定を追加する</li>
-            <li><code>binocularExposureTimer</code> を危険度へ反映する</li>
-            <li>双眼鏡観測時の <code>Speed / AOB</code> 推定補助を高精度化する</li>
-            <li>双眼鏡攻撃時の発射準備短縮と <code>即潜航 / 水上離脱</code> 分岐を追加する</li>
-            <li>護衛艦AIに双眼鏡浮上艦への高優先反応を追加する</li>
+            <li class="done">接敵ごとに敵編成を変えられるようにする</li>
+            <li class="done">フェーズ別のHUD文言を用意する</li>
+            <li class="done"><code>浮上双眼鏡攻撃</code> の <code>allowed / risky / blocked</code> 判定を追加する</li>
+            <li class="done"><code>binocularExposureTimer</code> を危険度へ反映する</li>
+            <li class="done">双眼鏡観測時の <code>Speed / AOB</code> 推定補助を高精度化する</li>
+            <li class="done">双眼鏡攻撃時の発射準備短縮と <code>即潜航 / 水上離脱</code> 分岐を追加する</li>
+            <li class="done">護衛艦AIに双眼鏡浮上艦への高優先反応を追加する</li>
             <li>プレイヤーが何も分からないまま詰まるフェーズがない</li>
             <li>雷撃後に離脱判断まで要求される</li>
           </ul>
@@ -304,19 +304,19 @@
         <div class="card">
           <h3>P1 タスク</h3>
           <ul class="checklist">
-            <li>ドイツ語復唱テンプレートテーブルをデータ化する</li>
-            <li><code>speakerRole / trigger / germanText / japaneseGloss / priority / voiceStyle</code> の構造を定義する</li>
-            <li>命令イベントから復唱イベントを発火させる</li>
-            <li>UIログにドイツ語原文と日本語意味を表示する</li>
-            <li>音声ON/OFF設定を追加する</li>
-            <li>テキストのみでも成立するフォールバックを用意する</li>
+            <li class="done">ドイツ語復唱テンプレートテーブルをデータ化する</li>
+            <li class="done"><code>speakerRole / trigger / germanText / japaneseGloss / priority / voiceStyle</code> の構造を定義する</li>
+            <li class="done">命令イベントから復唱イベントを発火させる</li>
+            <li class="done">UIログにドイツ語原文と日本語意味を表示する</li>
+            <li class="done">音声ON/OFF設定を追加する</li>
+            <li class="done">テキストのみでも成立するフォールバックを用意する</li>
           </ul>
         </div>
         <div class="card">
           <h3>P2 / P3 タスク / 確認項目</h3>
           <ul class="checklist">
-            <li><code>speechSynthesis</code> ベースのTTS再生を追加する</li>
-            <li><code>critical / high / normal</code> の優先度キューを実装する</li>
+            <li class="done"><code>speechSynthesis</code> ベースのTTS再生を追加する</li>
+            <li class="done"><code>critical / high / normal</code> の優先度キューを実装する</li>
             <li>同一話者クールダウンを実装する</li>
             <li><code>Alarm!</code> ベル、爆雷、機関音と音声のミックス方針を実装する</li>
             <li>話者別の話速や声質の設定項目を持たせる</li>
@@ -338,10 +338,10 @@
           <ul class="checklist">
             <li>損傷部位モデルを追加する</li>
             <li><code>浸水 / 電源 / 機関 / 発射管 / 操舵</code> などの系統損傷を分ける</li>
-            <li><code>silent_running</code> フェーズを実装する</li>
-            <li>騒音値が敵探知率に影響するようにする</li>
-            <li>爆雷攻撃イベントを実装する</li>
-            <li>回避行動の結果が被害量を左右するようにする</li>
+            <li class="done"><code>silent_running</code> フェーズを実装する</li>
+            <li class="done">騒音値が敵探知率に影響するようにする</li>
+            <li class="done">爆雷攻撃イベントを実装する</li>
+            <li class="done">回避行動の結果が被害量を左右するようにする</li>
             <li>ビルジポンプや応急修理の優先度を持たせる</li>
           </ul>
         </div>
@@ -349,7 +349,7 @@
           <h3>P2 タスク / 確認項目</h3>
           <ul class="checklist">
             <li>工具落下や移動音などの艦内ノイズ要素をイベント化する</li>
-            <li>深深度への移行と圧壊リスクを導入する</li>
+            <li class="done">深深度への移行と圧壊リスクを導入する</li>
             <li>損傷が役職UIにどのような制限を与えるか設計する</li>
             <li>雷撃後の最適行動が毎回 <code>即リセット</code> ではなく生還判断になる</li>
             <li>静粛潜航が数値だけでなく体感として分かる</li>
@@ -368,16 +368,16 @@
             <li><code>AI_SPEC.md</code> を基準に AI領域と非AI領域の責務をコードへ切り分ける</li>
             <li>敵駆逐艦艦長AIの意思決定レイヤーを作る</li>
             <li><code>escort_return / investigate_contact / attack_run / lost_contact_search / surface_pursuit</code> を状態化する</li>
-            <li>爆雷投下後の <code>acousticJammingFactor</code> を駆逐艦AIの追尾精度低下へ接続する</li>
+            <li class="done">爆雷投下後の <code>acousticJammingFactor</code> を駆逐艦AIの追尾精度低下へ接続する</li>
             <li>接触喪失時に最終推定位置周辺の探索を行う捜索ロジックを追加する</li>
-            <li>クルーSOPベースの半自律行動を作る</li>
-            <li>艦長命令に対して各部署が自動で一定範囲まで実行するようにする</li>
-            <li>艦内復唱AIの最小版として <code>Alarm!</code> / 接触報告 / 発射準備完了 / 発射 / 損傷報告 をテンプレート化する</li>
-            <li><code>speakerRole / trigger / germanText / japaneseGloss / priority / voiceStyle</code> 構造を実装する</li>
-            <li>録音音声優先、未収録時はTTSまたはテキストへフォールバックする音声キューを実装する</li>
-            <li>ソナー員AIとして観測段階に応じた短報 / 詳報 / 艦種推定を生成する</li>
-            <li>航海長AIとして推奨針路 / 推奨速力 / 推奨深度 / 理由を返す助言層を追加する</li>
-            <li>雷撃士AIとして <code>Speed推定補助 / AOB推定補助 / 発射不可理由</code> を返す説明層を追加する</li>
+            <li class="done">クルーSOPベースの半自律行動を作る</li>
+            <li class="done">艦長命令に対して各部署が自動で一定範囲まで実行するようにする</li>
+            <li class="done">艦内復唱AIの最小版として <code>Alarm!</code> / 接触報告 / 発射準備完了 / 発射 / 損傷報告 をテンプレート化する</li>
+            <li class="done"><code>speakerRole / trigger / germanText / japaneseGloss / priority / voiceStyle</code> 構造を実装する</li>
+            <li class="done">録音音声優先、未収録時はTTSまたはテキストへフォールバックする音声キューを実装する</li>
+            <li class="done">ソナー員AIとして観測段階に応じた短報 / 詳報 / 艦種推定を生成する</li>
+            <li class="done">航海長AIとして推奨針路 / 推奨速力 / 推奨深度 / 理由を返す助言層を追加する</li>
+            <li class="done">雷撃士AIとして <code>Speed推定補助 / AOB推定補助 / 発射不可理由</code> を返す説明層を追加する</li>
             <li>初心者アドバイザーAIとして次にやるべき行動を1行で出すヒント層を追加する</li>
           </ul>
         </div>
@@ -388,9 +388,9 @@
             <li>性格差に応じて護衛復帰優先 / 攻撃走維持 / 接触喪失後の粘りを変化させる</li>
             <li>副長、機関長、ソナー員から短い提案を返す仕組みを追加する</li>
             <li>艦内クルーAIの文言ゆらぎを役職別制約つきで追加する</li>
-            <li>ソナー員AIの報告を内部観測段階へ接続する</li>
-            <li>航海長AIの助言を <code>Captain Notes</code> / <code>Captain Intent</code> / <code>Navigation Report</code> に反映する</li>
-            <li>雷撃士AIの説明を <code>Best Shot</code> と <code>TDC補助</code> に反映する</li>
+            <li class="done">ソナー員AIの報告を内部観測段階へ接続する</li>
+            <li class="done">航海長AIの助言を <code>Captain Notes</code> / <code>Captain Intent</code> / <code>Navigation Report</code> に反映する</li>
+            <li class="done">雷撃士AIの説明を <code>Best Shot</code> と <code>TDC補助</code> に反映する</li>
             <li>AI提案とプレイヤー介入の優先関係を整理する</li>
             <li>AI応答失敗時に固定テンプレートへ戻すフォールバックを実装する</li>
             <li>戦闘後レポートAIとして <code>艦長日誌 / 戦術レビュー / 失敗要因分析</code> を生成する</li>
@@ -411,10 +411,10 @@
       <div class="card" style="margin-top:16px">
         <h3>AI実装順チェックリスト</h3>
         <ul class="checklist">
-          <li>AI-1: 艦内復唱テンプレートと音声キューを実装する</li>
-          <li>AI-2: ソナー員AIの段階報告を実装する</li>
-          <li>AI-3: 航海長AIの接敵 / 射点形成助言を実装する</li>
-          <li>AI-4: 雷撃士AIの Speed / AOB / 発射不可理由補助を実装する</li>
+          <li class="done">AI-1: 艦内復唱テンプレートと音声キューを実装する</li>
+          <li class="done">AI-2: ソナー員AIの段階報告を実装する</li>
+          <li class="done">AI-3: 航海長AIの接敵 / 射点形成助言を実装する</li>
+          <li class="done">AI-4: 雷撃士AIの Speed / AOB / 発射不可理由補助を実装する</li>
           <li>AI-5: 初心者アドバイザーAIを実装する</li>
           <li>AI-6: 駆逐艦AIの状態機械を実装する</li>
           <li>AI-7: 爆雷後ジャミングと接触喪失後探索を駆逐艦AIへ組み込む</li>
@@ -454,10 +454,10 @@
         <div class="card">
           <h3>先にやる順</h3>
           <ul class="checklist">
-            <li>1. Phase 0 の P1 を完了する</li>
+            <li class="done">1. Phase 0 の P1 を完了する</li>
             <li>2. Phase 1 の P1 を完了する</li>
-            <li>3. Phase 2 の P1 を完了する</li>
-            <li>4. Phase 3 の P1 を完了する</li>
+            <li class="done">3. Phase 2 の P1 を完了する</li>
+            <li class="done">4. Phase 3 の P1 を完了する</li>
             <li>5. Phase 4 の P1 を完了する</li>
             <li>6. Phase 1 から Phase 4 の P2 を順に追加する</li>
             <li>7. Phase 5 の AI-1 から AI-5 を順に追加する</li>
@@ -469,8 +469,8 @@
           <h3>実装の節目</h3>
           <ul class="checklist">
             <li>節目A: コア戦闘ループが通る</li>
-            <li>節目B: 急速潜航が通る</li>
-            <li>節目C: 復唱とTTSが通る</li>
+            <li class="done">節目B: 急速潜航が通る</li>
+            <li class="done">節目C: 復唱とTTSが通る</li>
             <li>節目D: 爆雷回避が通る</li>
             <li>節目E: AI駆逐艦が通る</li>
             <li>節目F: キャンペーンへ接続できる</li>
