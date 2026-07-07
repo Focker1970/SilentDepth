@@ -2201,6 +2201,13 @@ function alarmDiveOutlook() {
   return "危険";
 }
 
+function syncCaptainAlarmCard() {
+  if (!captainAlarmCardNode) return;
+  const visible = !!state.alarmDive.active;
+  captainAlarmCardNode.hidden = !visible;
+  captainAlarmCardNode.style.display = visible ? "block" : "none";
+}
+
 function startAlarmDive(reason = "enemy_contact", autoTriggered = false) {
   if (state.alarmDive.active || !state.running) return;
   if (state.time < (state.alarmDiveCooldownUntil || 0)) return;
@@ -2241,9 +2248,7 @@ function startAlarmDive(reason = "enemy_contact", autoTriggered = false) {
   emitGermanRepeater("alarmDiveStart");
   setStatus("Alarm! 急速潜航開始。各部署が自動手順へ移行。", "bad");
   state.alarmDiveCooldownUntil = state.time + 18;
-  if (captainAlarmCardNode) {
-    captainAlarmCardNode.style.display = "block";
-  }
+  syncCaptainAlarmCard();
   updateButtons();
 }
 
@@ -2307,9 +2312,7 @@ function resolveAlarmDive(success) {
   state.alarmDive.active = false;
   state.alarmDive.resolved = success ? "success" : "failure";
   state.alarmDiveCooldownUntil = Math.max(state.alarmDiveCooldownUntil || 0, state.time + 18);
-  if (captainAlarmCardNode) {
-    captainAlarmCardNode.style.display = "none";
-  }
+  syncCaptainAlarmCard();
   if (sub.hull <= 0) {
     state.running = false;
     state.battlePhase = BATTLE_PHASES.disabled;
@@ -4375,9 +4378,7 @@ function updateHud() {
           ? "離脱針路の維持と護衛回避"
       : "意図命令、観測、命令優先度の調整";
   captainReportNode.textContent = `${state.command.captainOrder} / 優先度 ${state.command.priorityLabel}`;
-  if (captainAlarmCardNode) {
-    captainAlarmCardNode.style.display = state.alarmDive.active ? "block" : "none";
-  }
+  syncCaptainAlarmCard();
   alarmStateNode.textContent = state.alarmDive.active
     ? "急速潜航中"
     : state.alarmDive.resolved === "success"
@@ -4672,6 +4673,7 @@ function resetGame() {
   state.battlePhase = BATTLE_PHASES.patrol;
   state.battlePhaseEnteredAt = 0;
   state.alarmDive = createAlarmDiveState();
+  syncCaptainAlarmCard();
   state.binocularAttackState = "blocked";
   state.binocularExposureTimer = 0;
   state.binocularAttackReason = "護衛接触を確認するまで浮上攻撃は禁止。";
