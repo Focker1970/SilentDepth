@@ -627,6 +627,14 @@ const BATTLE_PHASES = {
   disabled: "disabled"
 };
 
+const ESCORT_AI_INTENTS = {
+  escortReturn: "escort_return",
+  investigateContact: "investigate_contact",
+  attackRun: "attack_run",
+  lostContactSearch: "lost_contact_search",
+  surfacePursuit: "surface_pursuit"
+};
+
 const TORPEDO_SEQUENCE = {
   idle: "idle",
   targetSelected: "target_selected",
@@ -2696,6 +2704,7 @@ function createContact(type, overrides = {}) {
     escort: { speed: 4.8, hp: 2, hostile: true, priority: false, tone: 180 },
     flagship: { speed: 3.1, hp: 2, hostile: false, priority: true, tone: 145 }
   }[type];
+  const escortPersonality = chooseRandom(["cautious", "balanced", "aggressive"]);
 
   return {
     id: `${type}-${Math.random().toString(16).slice(2)}`,
@@ -2724,6 +2733,12 @@ function createContact(type, overrides = {}) {
     depthChargesRemaining: preset.hostile ? ESCORT_DEPTH_CHARGE_CAPACITY : 0,
     depthChargeCapacity: preset.hostile ? ESCORT_DEPTH_CHARGE_CAPACITY : 0,
     outOfDepthChargesReported: false,
+    aiIntent: preset.hostile ? ESCORT_AI_INTENTS.escortReturn : null,
+    aiIntentChangedAt: 0,
+    aiDecisionCooldown: randomRange(1.1, 2.4),
+    searchCenter: null,
+    searchHeading: randomRange(0, 360),
+    escortPersonality,
     ...overrides
   };
 }
@@ -2734,6 +2749,81 @@ function randomCenteredOffset(range) {
 
 function chooseRandom(options) {
   return options[Math.floor(Math.random() * options.length)];
+}
+
+function escortPersonalityBias(contact) {
+  if (contact.escortPersonality === "aggressive") {
+    return { attackBias: 0.08, returnBias: -0.05, searchBias: 0.04 };
+  }
+  if (contact.escortPersonality === "cautious") {
+    return { attackBias: -0.05, returnBias: 0.08, searchBias: 0.02 };
+  }
+  return { attackBias: 0, returnBias: 0, searchBias: 0 };
+}
+
+function nearestEscortProtectedShip(contact) {
+  return state.contacts
+    .filter(
+      (other) =>
+        !other.destroyed &&
+        !other.hostile &&
+        (other.type === "flagship" || other.type === "convoy")
+    )
+    .sort((a, b) => distance(contact, a) - distance(contact, b))[0] || null;
+}
+
+function setEscortIntent(contact, nextIntent, extra = {}) {
+  if (contact.aiIntent !== nextIntent) {
+    contact.aiIntent = nextIntent;
+    contact.aiIntentChangedAt = state.time;
+  }
+  if (extra.searchCenter) {
+    contact.searchCenter = { ...extra.searchCenter };
+  }
+  if (extra.searchHeading != null) {
+    contact.searchHeading = extra.searchHeading;
+  }
+}
+
+function evaluateEscortIntent(contact, sub, range, hearsSub, jam, surfaced) {
+  const personality = escortPersonalityBias(contact);
+  const protectedShip = nearestEscortProtectedShip(contact);
+  const convoyDistance = protectedShip ? distance(contact, protectedShip) : Infinity;
+  const chaseMode = (contact.chaseModeTimer || 0) > 0;
+  const alert = contact.alert || 0;
+  const hasDepthCharges = (contact.depthChargesRemaining ?? 0) > 0;
+  const canSeeSurfaced =
+    surfaced &&
+    range < (state.viewMode === "binocular" ? 2200 : 1700) &&
+    jam < 0.8;
+  const attackUrgency =
+    alert +
+    (chaseMode ? 0.16 : 0) +
+    (hearsSub ? 0.2 : 0) +
+    (canSeeSurfaced ? 0.22 : 0) +
+    personality.attackBias;
+
+  if (canSeeSurfaced && attackUrgency > 0.55) {
+    return ESCORT_AI_INTENTS.surfacePursuit;
+  }
+  if (
+    hearsSub &&
+    hasDepthCharges &&
+    range < (chaseMode ? ESCORT_CHASE_ATTACK_RANGE * 1.45 : ESCORT_ATTACK_RANGE * 1.25) &&
+    attackUrgency > 0.5
+  ) {
+    return ESCORT_AI_INTENTS.attackRun;
+  }
+  if (hearsSub && alert + personality.searchBias > 0.28) {
+    return ESCORT_AI_INTENTS.investigateContact;
+  }
+  if ((chaseMode || alert > 0.34) && jam < 0.92) {
+    return ESCORT_AI_INTENTS.lostContactSearch;
+  }
+  if (convoyDistance > 900 - personality.returnBias * 180 || alert < 0.18) {
+    return ESCORT_AI_INTENTS.escortReturn;
+  }
+  return ESCORT_AI_INTENTS.investigateContact;
 }
 
 function rotateOffset(offset, angleDeg) {
@@ -5682,6 +5772,7 @@ function updateSubmarine(deltaTime) {
 function updateContacts(deltaTime) {
   const sub = state.submarine;
   const jam = acousticJammingFactor();
+  const surfaced = isSurfaced(sub);
 
   for (const contact of state.contacts) {
     if (contact.destroyed) continue;
@@ -5690,6 +5781,7 @@ function updateContacts(deltaTime) {
       const range = distance(sub, contact);
       contact.chaseModeTimer = Math.max(0, (contact.chaseModeTimer || 0) - deltaTime);
       contact.reacquireLockout = Math.max(0, (contact.reacquireLockout || 0) - deltaTime);
+      contact.aiDecisionCooldown = Math.max(0, (contact.aiDecisionCooldown || 0) - deltaTime);
       const chaseMode = contact.chaseModeTimer > 0;
       const silentFactor = state.silentRunning ? 120 : 0;
       const depthMasking = sub.depth >= 200 ? 120 : sub.depth >= 140 ? 70 : sub.depth >= 90 ? 35 : 0;
@@ -5710,30 +5802,80 @@ function updateContacts(deltaTime) {
           contact.alert > 0.55 + jam * 0.18
         );
 
-      if (hearsSub) {
-        const desired = bearing(contact, sub);
-        contact.heading = normalizeAngle(
-          contact.heading +
-            clamp(normalizeAngle(desired - contact.heading), -20 * deltaTime, 20 * deltaTime)
-        );
-        const chaseSpeedTarget = chaseMode ? 6.4 : 5.0;
-        contact.speed += (chaseSpeedTarget - contact.speed) * Math.min(1, deltaTime * (chaseMode ? 1.0 : 0.65));
-        contact.alert = clamp(
-          contact.alert + deltaTime * (chaseMode ? 0.09 : 0.05) + sub.noise * 0.01 - jam * 0.025,
-          0,
-          1
-        );
-        sub.detection = clamp(sub.detection + deltaTime * (chaseMode ? 0.052 : 0.03), 0, 1);
-      } else {
-        contact.speed += (3.6 - contact.speed) * Math.min(1, deltaTime * 0.4);
-        contact.alert = clamp(contact.alert - deltaTime * (0.07 + jam * 0.05), 0, 1);
-        if (contact.reacquireLockout > 0) {
-          contact.heading = normalizeAngle(contact.heading + randomRange(-8, 8) * deltaTime);
+      if (contact.aiDecisionCooldown <= 0) {
+        const nextIntent = evaluateEscortIntent(contact, sub, range, hearsSub, jam, surfaced);
+        const extra = {};
+        if (
+          nextIntent === ESCORT_AI_INTENTS.lostContactSearch &&
+          contact.aiIntent !== ESCORT_AI_INTENTS.lostContactSearch
+        ) {
+          extra.searchCenter = { x: sub.x, y: sub.y };
+          extra.searchHeading = bearing(contact, sub);
         }
+        setEscortIntent(contact, nextIntent, extra);
+        contact.aiDecisionCooldown = randomRange(1.2, 2.8);
       }
 
+      const protectedShip = nearestEscortProtectedShip(contact);
+      const intent = contact.aiIntent || ESCORT_AI_INTENTS.escortReturn;
+      let desiredHeading = contact.heading;
+      let speedTarget = 3.8;
+
+      if (intent === ESCORT_AI_INTENTS.attackRun) {
+        desiredHeading = bearing(contact, sub);
+        speedTarget = chaseMode ? 6.4 : 5.4;
+        contact.alert = clamp(contact.alert + deltaTime * 0.08 + sub.noise * 0.01 - jam * 0.03, 0, 1);
+        sub.detection = clamp(sub.detection + deltaTime * (chaseMode ? 0.05 : 0.026), 0, 1);
+      } else if (intent === ESCORT_AI_INTENTS.surfacePursuit) {
+        desiredHeading = bearing(contact, sub);
+        speedTarget = 6.8;
+        contact.chaseModeTimer = Math.max(contact.chaseModeTimer || 0, 22);
+        contact.alert = clamp(contact.alert + deltaTime * 0.1 - jam * 0.015, 0, 1);
+        sub.detection = clamp(sub.detection + deltaTime * 0.06, 0, 1);
+      } else if (intent === ESCORT_AI_INTENTS.investigateContact) {
+        desiredHeading = bearing(contact, sub);
+        speedTarget = chaseMode ? 5.4 : 4.7;
+        contact.alert = clamp(contact.alert + deltaTime * 0.035 + sub.noise * 0.008 - jam * 0.03, 0, 1);
+      } else if (intent === ESCORT_AI_INTENTS.lostContactSearch) {
+        const center = contact.searchCenter || { x: sub.x, y: sub.y };
+        const centerRange = distance(contact, center);
+        if (centerRange > 180) {
+          desiredHeading = bearing(contact, center);
+        } else {
+          contact.searchHeading = normalizeAngle((contact.searchHeading || contact.heading) + deltaTime * 24);
+          desiredHeading = contact.searchHeading;
+        }
+        speedTarget = 3.4;
+        contact.alert = clamp(contact.alert - deltaTime * (0.018 + jam * 0.02), 0.12, 1);
+      } else {
+        if (protectedShip) {
+          const offsetHeading = normalizeAngle(protectedShip.heading + 70);
+          const offsetRange = protectedShip.priority ? 460 : 340;
+          const returnPoint = {
+            x: clamp(protectedShip.x + Math.cos(toRadians(offsetHeading)) * offsetRange, 0, WORLD.width),
+            y: clamp(protectedShip.y + Math.sin(toRadians(offsetHeading)) * offsetRange, 0, WORLD.height)
+          };
+          desiredHeading = bearing(contact, returnPoint);
+        } else {
+          desiredHeading = normalizeAngle(contact.heading + randomRange(-4, 4));
+        }
+        speedTarget = 4.2;
+        contact.alert = clamp(contact.alert - deltaTime * (0.05 + jam * 0.03), 0, 1);
+      }
+
+      contact.heading = normalizeAngle(
+        contact.heading +
+          clamp(normalizeAngle(desiredHeading - contact.heading), -20 * deltaTime, 20 * deltaTime)
+      );
+      contact.speed += (speedTarget - contact.speed) * Math.min(1, deltaTime * (intent === ESCORT_AI_INTENTS.attackRun || intent === ESCORT_AI_INTENTS.surfacePursuit ? 1.0 : 0.55));
+
       contact.attackCooldown -= deltaTime;
-      const attackRange = chaseMode ? ESCORT_CHASE_ATTACK_RANGE : ESCORT_ATTACK_RANGE;
+      const attackRange =
+        intent === ESCORT_AI_INTENTS.surfacePursuit
+          ? ESCORT_CHASE_ATTACK_RANGE
+          : chaseMode
+            ? ESCORT_CHASE_ATTACK_RANGE
+            : ESCORT_ATTACK_RANGE;
       if ((contact.depthChargesRemaining ?? 0) <= 0) {
         if (!contact.outOfDepthChargesReported) {
           contact.outOfDepthChargesReported = true;
@@ -5744,6 +5886,8 @@ function updateContacts(deltaTime) {
         (contact.depthChargesRemaining ?? 0) > 0 &&
         contact.attackCooldown <= 0 &&
         range < attackRange &&
+        !surfaced &&
+        (intent === ESCORT_AI_INTENTS.attackRun || intent === ESCORT_AI_INTENTS.surfacePursuit) &&
         contact.alert > (chaseMode ? 0.52 : 0.64)
       ) {
         contact.attackCooldown = randomRange(chaseMode ? 10 : 12, chaseMode ? 16 : 20);
