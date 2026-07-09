@@ -94,6 +94,10 @@ const campaignWolfpackNode = document.getElementById("campaign-wolfpack");
 const campaignOutcomeNode = document.getElementById("campaign-outcome");
 const campaignNoteNode = document.getElementById("campaign-note");
 const campaignResupplyButton = document.getElementById("campaign-resupply-button");
+const campaignDecisionCardNode = document.getElementById("campaign-decision-card");
+const campaignDecisionSummaryNode = document.getElementById("campaign-decision-summary");
+const campaignContinueButton = document.getElementById("campaign-continue-button");
+const campaignReturnButton = document.getElementById("campaign-return-button");
 
 const pingButton = document.getElementById("ping");
 const captainPingButton = document.getElementById("captain-ping");
@@ -939,6 +943,10 @@ function campaignStatusTone() {
   return "哨戒継続";
 }
 
+function nextStageIndex() {
+  return state.stageIndex < STAGES.length - 1 ? state.stageIndex + 1 : 0;
+}
+
 function syncCampaignOperationalState() {
   const campaign = state.campaign;
   const sub = state.submarine;
@@ -970,14 +978,34 @@ function markMissionOutcome(outcomeText, cleared) {
   }
 }
 
-function returnToBaseAndResupply() {
+function advanceToStage(nextIndex, note) {
+  state.campaign.readyForResupply = false;
+  if (note) {
+    state.campaign.lastOutcome = note;
+  }
+  state.stageIndex = clamp(Math.round(nextIndex), 0, STAGES.length - 1);
+  resetGame();
+}
+
+function continuePatrolToNextStage() {
+  const nextIndex = nextStageIndex();
+  advanceToStage(
+    nextIndex,
+    `継続哨戒。損耗を抱えたまま ${STAGES[nextIndex].name} へ移行。`
+  );
+  addLog("継続哨戒を決定。補給なしで次任務海域へ向かう。");
+  setStatus("継続哨戒。損耗持越しで次任務へ移行。", "warning");
+}
+
+function returnToBaseAndResupply(nextIndex = state.stageIndex) {
   state.campaign.hull = 100;
   state.campaign.battery = 100;
   state.campaign.reserveTorpedoes = 9;
   state.campaign.torpedoTubes = cloneTubeBank(createTorpedoTubeBank());
   state.campaign.resupplyCount += 1;
   state.campaign.readyForResupply = false;
-  state.campaign.lastOutcome = "帰投補給完了。再出撃準備よし。";
+  state.campaign.lastOutcome = `帰投補給完了。${STAGES[nextIndex].name} へ再出撃準備よし。`;
+  state.stageIndex = clamp(Math.round(nextIndex), 0, STAGES.length - 1);
   resetGame();
   addLog("帰投補給完了。船体修理、電池満充電、全発射管再装填済み。");
   setStatus("帰投補給完了。再出撃可能。", "good");
@@ -4291,12 +4319,28 @@ function updateButtons() {
         ? "持越ダメージと残弾を補給・修理して再出撃準備を行う。"
         : `${campaignStatusTone()}。任務結果確定後に補給を実施できます。`;
   }
+  if (campaignDecisionCardNode) {
+    campaignDecisionCardNode.style.display = state.stageState.cleared ? "" : "none";
+  }
+  if (campaignDecisionSummaryNode) {
+    const nextStage = STAGES[nextStageIndex()];
+    campaignDecisionSummaryNode.textContent = state.stageState.cleared
+      ? `任務完了。${nextStage.name} へ 損耗持越しで継続するか、帰投補給してから向かうかを選択。`
+      : "任務完了後の行動を選択。";
+  }
+  if (campaignContinueButton) {
+    setButtonState(campaignContinueButton, "active", state.stageState.cleared);
+  }
+  if (campaignReturnButton) {
+    setButtonState(campaignReturnButton, "active", state.stageState.cleared);
+  }
   syncStageSelect();
 }
 
 function handleRestartAction() {
   if (state.stageState.cleared) {
-    state.stageIndex = state.stageIndex < STAGES.length - 1 ? state.stageIndex + 1 : 0;
+    continuePatrolToNextStage();
+    return;
   }
   resetGame();
 }
@@ -8755,6 +8799,14 @@ campaignResupplyButton?.addEventListener("click", () => {
     return;
   }
   returnToBaseAndResupply();
+});
+campaignContinueButton?.addEventListener("click", () => {
+  if (!state.stageState.cleared) return;
+  continuePatrolToNextStage();
+});
+campaignReturnButton?.addEventListener("click", () => {
+  if (!state.stageState.cleared) return;
+  returnToBaseAndResupply(nextStageIndex());
 });
 stageSelectNode?.addEventListener("change", () => setStageIndex(Number(stageSelectNode.value)));
 canvas?.addEventListener("click", (event) => {
