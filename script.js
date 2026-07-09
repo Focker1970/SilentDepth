@@ -559,6 +559,20 @@ const GERMAN_VOICE_FILES = {
 };
 
 const ROLE_VOICE_ORDER = ["captain", "watch", "sonar", "torpedo", "engineer", "navigation", "crew"];
+const ROLE_VOICE_PROFILES = {
+  captain: { label: "艦長", cooldown: 0.9, voiceStyle: "command" },
+  watch: { label: "見張り", cooldown: 1.1, voiceStyle: "watch" },
+  sonar: { label: "ソナー員", cooldown: 1.8, voiceStyle: "report" },
+  torpedo: { label: "雷撃士", cooldown: 1.2, voiceStyle: "combat" },
+  engineer: { label: "機関部", cooldown: 1.2, voiceStyle: "engineering" },
+  navigation: { label: "航海長", cooldown: 1.1, voiceStyle: "helm" },
+  crew: { label: "乗組員", cooldown: 2.4, voiceStyle: "crew" }
+};
+const VOICE_PRIORITY_RULES = {
+  critical: { rank: 0, repeatCooldown: 0.4 },
+  high: { rank: 1, repeatCooldown: 1.6 },
+  normal: { rank: 2, repeatCooldown: 3.2 }
+};
 const SONAR_SAMPLE_FILES = {
   escort: "audio/sonar_ship_escort.mp3",
   flagship: "audio/sonar_ship_flagship.mp3",
@@ -578,6 +592,8 @@ const audioState = {
   voiceBusy: false,
   currentVoiceAudio: null,
   lastVoiceAt: new Map(),
+  recentVoiceAt: new Map(),
+  lastVoiceEntry: null,
   availableVoices: [],
   roleVoiceMap: new Map(),
   voicesInitialized: false,
@@ -1934,6 +1950,30 @@ function addRepeatLog(entry) {
   addLog(`${entry.speakerRole}: "${entry.germanText}" (${entry.japaneseGloss})`);
 }
 
+function getVoiceRoleProfile(role) {
+  return ROLE_VOICE_PROFILES[role] || { label: role || "乗組員", cooldown: 1.2, voiceStyle: "generic" };
+}
+
+function getVoicePriorityRule(priority) {
+  return VOICE_PRIORITY_RULES[priority] || VOICE_PRIORITY_RULES.normal;
+}
+
+function buildVoiceRepeatKey(entry) {
+  return `${entry.trigger || entry.germanText}:${entry.speakerRole}`;
+}
+
+function describeVoiceRuntime() {
+  const base = describeVoiceMode();
+  const queuedCount = audioState.voiceQueue.length;
+  const lastEntry = audioState.lastVoiceEntry;
+  if (!lastEntry) {
+    return queuedCount > 0 ? `${base} 待機 ${queuedCount} 件。` : base;
+  }
+  const roleLabel = getVoiceRoleProfile(lastEntry.speakerRole).label;
+  const latest = `${roleLabel}: ${lastEntry.japaneseGloss}`;
+  return queuedCount > 0 ? `${base} 待機 ${queuedCount} 件。最新 ${latest}` : `${base} 最新 ${latest}`;
+}
+
 function stopVoicePlayback() {
   if ("speechSynthesis" in window) {
     window.speechSynthesis.cancel();
@@ -1945,6 +1985,8 @@ function stopVoicePlayback() {
   }
   audioState.voiceQueue = [];
   audioState.voiceBusy = false;
+  audioState.lastVoiceEntry = null;
+  updateButtons();
 }
 
 function flushVoiceQueue() {
@@ -1954,6 +1996,8 @@ function flushVoiceQueue() {
   if (!next) return;
 
   audioState.voiceBusy = true;
+  audioState.lastVoiceEntry = next;
+  updateButtons();
   const shouldUseRecordedVoice = next.audioSrc && audioState.voiceSourceMode === "asset";
   if (shouldUseRecordedVoice) {
     const audio = new Audio(next.audioSrc);
@@ -1963,6 +2007,7 @@ function flushVoiceQueue() {
     audio.onended = () => {
       audioState.currentVoiceAudio = null;
       audioState.voiceBusy = false;
+      updateButtons();
       flushVoiceQueue();
     };
     audio.onerror = () => {
@@ -1971,6 +2016,7 @@ function flushVoiceQueue() {
       if ("speechSynthesis" in window && typeof SpeechSynthesisUtterance !== "undefined") {
         audioState.voiceQueue.unshift({ ...next, audioSrc: null });
       }
+      updateButtons();
       flushVoiceQueue();
     };
     audio.play().catch(() => {
@@ -1979,6 +2025,7 @@ function flushVoiceQueue() {
       if ("speechSynthesis" in window && typeof SpeechSynthesisUtterance !== "undefined") {
         audioState.voiceQueue.unshift({ ...next, audioSrc: null });
       }
+      updateButtons();
       flushVoiceQueue();
     });
     return;
@@ -1986,6 +2033,7 @@ function flushVoiceQueue() {
 
   if (!("speechSynthesis" in window) || typeof SpeechSynthesisUtterance === "undefined") {
     audioState.voiceBusy = false;
+    updateButtons();
     return;
   }
 
@@ -2002,10 +2050,12 @@ function flushVoiceQueue() {
 
   utterance.onend = () => {
     audioState.voiceBusy = false;
+    updateButtons();
     flushVoiceQueue();
   };
   utterance.onerror = () => {
     audioState.voiceBusy = false;
+    updateButtons();
     flushVoiceQueue();
   };
 
@@ -2013,18 +2063,41 @@ function flushVoiceQueue() {
 }
 
 function queueVoiceLine(entry) {
+  if (!audioState.voiceEnabled) return;
+
   const now = state.time;
+  const roleProfile = getVoiceRoleProfile(entry.speakerRole);
+  const priorityRule = getVoicePriorityRule(entry.priority);
+  const repeatKey = buildVoiceRepeatKey(entry);
   const lastAt = audioState.lastVoiceAt.get(entry.speakerRole) ?? -Infinity;
-  if (now - lastAt < 1.2) return;
+  const lastRepeatAt = audioState.recentVoiceAt.get(repeatKey) ?? -Infinity;
+
+  if (entry.priority !== "critical" && now - lastAt < roleProfile.cooldown) return;
+  if (now - lastRepeatAt < (entry.repeatCooldown ?? priorityRule.repeatCooldown)) return;
 
   audioState.lastVoiceAt.set(entry.speakerRole, now);
+  audioState.recentVoiceAt.set(repeatKey, now);
   if (entry.priority === "critical") {
     stopVoicePlayback();
   }
 
+  const normalizedEntry = {
+    ...entry,
+    trigger: entry.trigger || null,
+    voiceStyle: entry.voiceStyle || roleProfile.voiceStyle,
+    roleLabel: roleProfile.label
+  };
   const queuedEntry =
-    audioState.voiceSourceMode === "tts" ? { ...entry, audioSrc: null } : entry;
-  audioState.voiceQueue.push(queuedEntry);
+    audioState.voiceSourceMode === "tts" ? { ...normalizedEntry, audioSrc: null } : normalizedEntry;
+  const insertIndex = audioState.voiceQueue.findIndex(
+    (queued) => getVoicePriorityRule(queued.priority).rank > priorityRule.rank
+  );
+  if (insertIndex === -1) {
+    audioState.voiceQueue.push(queuedEntry);
+  } else {
+    audioState.voiceQueue.splice(insertIndex, 0, queuedEntry);
+  }
+  updateButtons();
   flushVoiceQueue();
 }
 
@@ -2075,7 +2148,9 @@ function emitGermanRepeater(trigger) {
   const entries = GERMAN_REPEATERS[trigger] || [];
   const audioFiles = GERMAN_VOICE_FILES[trigger] || [];
   for (const [index, entry] of entries.entries()) {
-    const nextEntry = audioFiles[index] ? { ...entry, audioSrc: audioFiles[index] } : entry;
+    const nextEntry = audioFiles[index]
+      ? { ...entry, trigger, audioSrc: audioFiles[index] }
+      : { ...entry, trigger };
     addRepeatLog(nextEntry);
     if (audioState.voiceEnabled) {
       queueVoiceLine(nextEntry);
@@ -3663,7 +3738,7 @@ function updateButtons() {
   }
   if (voiceStatusNode) {
     voiceStatusNode.textContent = audioState.voiceEnabled
-      ? describeVoiceMode()
+      ? describeVoiceRuntime()
       : "独語復唱は停止中。ヘッダーの ON/OFF で再開。";
   }
   const zoomLabel = opticsZoomLabel();
@@ -4655,6 +4730,8 @@ function resetGame() {
   const stageSetup = stage.setup();
   stopVoicePlayback();
   audioState.lastVoiceAt.clear();
+  audioState.recentVoiceAt.clear();
+  audioState.lastVoiceEntry = null;
   state.running = true;
   state.time = 0;
   state.missionClockStart = stage.startClock ?? 0;
