@@ -2826,6 +2826,22 @@ function evaluateEscortIntent(contact, sub, range, hearsSub, jam, surfaced) {
   return ESCORT_AI_INTENTS.investigateContact;
 }
 
+function escortIntentLabel(intent) {
+  switch (intent) {
+    case ESCORT_AI_INTENTS.attackRun:
+      return "攻撃走";
+    case ESCORT_AI_INTENTS.lostContactSearch:
+      return "捜索";
+    case ESCORT_AI_INTENTS.surfacePursuit:
+      return "水上追撃";
+    case ESCORT_AI_INTENTS.investigateContact:
+      return "接触確認";
+    case ESCORT_AI_INTENTS.escortReturn:
+    default:
+      return "護衛復帰";
+  }
+}
+
 function rotateOffset(offset, angleDeg) {
   const radians = toRadians(angleDeg);
   const cos = Math.cos(radians);
@@ -4915,6 +4931,10 @@ function updateHud() {
         .map((entry) => {
           const observed = state.observedContacts.get(entry.contact.id);
           const intel = sonarIntelSummary(entry.contact);
+          const escortIntentNote =
+            entry.contact.hostile && entry.contact.aiIntent
+              ? ` / 護衛:${escortIntentLabel(entry.contact.aiIntent)}`
+              : "";
           const typeLabel = observed?.suspectedType
             ? ` / 推定 ${contactLabel({ type: observed.suspectedType })} ${Math.round(
                 (observed.identifyConfidence || 0) * 100
@@ -4926,7 +4946,7 @@ function updateHud() {
             intel.brief
           }${observed?.rangeBand ? ` / ${observed.rangeBand}` : ""}${
             observed?.estimatedSpeed != null ? ` / ${observed.estimatedSpeed.toFixed(1)}kt` : ""
-          }${observed?.estimatedHeading != null ? ` / ${formatHeading(observed.estimatedHeading)}` : ""}${typeLabel}</div>${sonarStageGaugeMarkup(
+          }${observed?.estimatedHeading != null ? ` / ${formatHeading(observed.estimatedHeading)}` : ""}${typeLabel}${escortIntentNote}</div>${sonarStageGaugeMarkup(
             intel.stage
           )}</li>`;
         })
@@ -6543,6 +6563,7 @@ function drawContacts(camera) {
           ? "#ffd57c"
           : "#9bd9a5";
     const chaseMode = (contact.chaseModeTimer || 0) > 0;
+    const escortIntentText = contact.hostile ? escortIntentLabel(contact.aiIntent) : null;
     const focusedOpticsTarget =
       state.station === "captain" &&
       state.viewMode === "binocular" &&
@@ -6577,6 +6598,11 @@ function drawContacts(camera) {
       ctx.font = "11px Avenir Next, Hiragino Sans, sans-serif";
       ctx.fillText("追撃", -12, -60);
       ctx.lineWidth = 1;
+    }
+    if (contact.hostile && escortIntentText) {
+      ctx.fillStyle = chaseMode ? "#ffe3db" : "rgba(255, 218, 206, 0.92)";
+      ctx.font = "11px Avenir Next, Hiragino Sans, sans-serif";
+      ctx.fillText(escortIntentText, -18, chaseMode ? -74 : -46);
     }
     if (focusedOpticsTarget) {
       ctx.strokeStyle = "rgba(255, 240, 130, 0.95)";
@@ -6872,6 +6898,11 @@ function drawOverlay() {
     const escortThreat = escortContacts.length
       ? Math.max(...escortContacts.map((contact) => contact.alert))
       : 0;
+    const escortIntentCounts = escortContacts.reduce((counts, contact) => {
+      const key = contact.aiIntent || ESCORT_AI_INTENTS.escortReturn;
+      counts[key] = (counts[key] || 0) + 1;
+      return counts;
+    }, {});
     const threatTone =
       escortThreat > 0.66 || activeChasers > 0
         ? { fill: "rgba(255, 139, 120, 0.18)", stroke: "rgba(255, 139, 120, 0.34)", text: "#ffd9d1" }
@@ -6972,6 +7003,18 @@ function drawOverlay() {
       meterX + 86,
       meterY + 68
     );
+    const escortIntentSummary = [
+      escortIntentCounts[ESCORT_AI_INTENTS.attackRun] ? `攻撃走 ${escortIntentCounts[ESCORT_AI_INTENTS.attackRun]}` : null,
+      escortIntentCounts[ESCORT_AI_INTENTS.lostContactSearch] ? `捜索 ${escortIntentCounts[ESCORT_AI_INTENTS.lostContactSearch]}` : null,
+      escortIntentCounts[ESCORT_AI_INTENTS.investigateContact] ? `確認 ${escortIntentCounts[ESCORT_AI_INTENTS.investigateContact]}` : null,
+      escortIntentCounts[ESCORT_AI_INTENTS.escortReturn] ? `復帰 ${escortIntentCounts[ESCORT_AI_INTENTS.escortReturn]}` : null,
+      escortIntentCounts[ESCORT_AI_INTENTS.surfacePursuit] ? `水上追撃 ${escortIntentCounts[ESCORT_AI_INTENTS.surfacePursuit]}` : null
+    ]
+      .filter(Boolean)
+      .join(" / ");
+    ctx.fillStyle = "#8faeb9";
+    ctx.font = "11px Avenir Next, Hiragino Sans, sans-serif";
+    ctx.fillText(truncate(escortIntentSummary || "復帰", 34), meterX + 14, meterY + 82);
 
     if (state.runtimeError) {
       ctx.fillStyle = "#ff8b78";
