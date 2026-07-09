@@ -98,6 +98,9 @@ const campaignDecisionCardNode = document.getElementById("campaign-decision-card
 const campaignDecisionSummaryNode = document.getElementById("campaign-decision-summary");
 const campaignContinueButton = document.getElementById("campaign-continue-button");
 const campaignReturnButton = document.getElementById("campaign-return-button");
+const campaignSaveButton = document.getElementById("campaign-save-button");
+const campaignResumeButton = document.getElementById("campaign-resume-button");
+const campaignNewButton = document.getElementById("campaign-new-button");
 
 const pingButton = document.getElementById("ping");
 const captainPingButton = document.getElementById("captain-ping");
@@ -229,6 +232,7 @@ const TONNAGE_BY_TYPE = {
   flagship: 9000,
   escort: 1800
 };
+const CAMPAIGN_SAVE_KEY = "silentdepth-campaign-save-v1";
 const MAST_HEIGHT = { escort: 14, flagship: 18, convoy: 12 };
 const MAST_K = 1600;
 const RETICLE_TICK_SPACING = 20;
@@ -929,11 +933,132 @@ const state = {
     lastSolutionReadyAt: -Infinity,
     lastSurfaced: false,
     strongerContactAtById: new Map()
+  },
+  saveState: {
+    hasSnapshot: false,
+    lastSavedAt: 0,
+    lastLoadedAt: 0
   }
 };
 
 function clamp(value, min, max) {
   return Math.max(min, Math.min(max, value));
+}
+
+function canUseCampaignStorage() {
+  try {
+    return typeof window !== "undefined" && Boolean(window.localStorage);
+  } catch {
+    return false;
+  }
+}
+
+function safeCampaignStorageGet() {
+  if (!canUseCampaignStorage()) return null;
+  try {
+    return window.localStorage.getItem(CAMPAIGN_SAVE_KEY);
+  } catch {
+    return null;
+  }
+}
+
+function syncSavePresence() {
+  state.saveState.hasSnapshot = Boolean(safeCampaignStorageGet());
+}
+
+function serializeCampaignSnapshot() {
+  syncCampaignOperationalState();
+  return {
+    version: 1,
+    savedAt: Date.now(),
+    stageIndex: state.stageIndex,
+    campaign: {
+      ...state.campaign,
+      torpedoTubes: cloneTubeBank(state.campaign.torpedoTubes || createTorpedoTubeBank())
+    }
+  };
+}
+
+function saveCampaignSnapshot(mode = "manual") {
+  if (!canUseCampaignStorage()) {
+    if (mode === "manual") {
+      setStatus("このブラウザではローカル保存を利用できない。", "bad");
+    }
+    return false;
+  }
+  try {
+    const snapshot = serializeCampaignSnapshot();
+    window.localStorage.setItem(CAMPAIGN_SAVE_KEY, JSON.stringify(snapshot));
+    state.saveState.hasSnapshot = true;
+    state.saveState.lastSavedAt = snapshot.savedAt;
+    if (mode === "manual") {
+      setStatus("Campaign Status を保存。再開時は現在ステージ冒頭から復元。", "good");
+    }
+    return true;
+  } catch {
+    if (mode === "manual") {
+      setStatus("Campaign Status の保存に失敗。", "bad");
+    }
+    return false;
+  }
+}
+
+function applyCampaignSnapshot(snapshot) {
+  const nextCampaign = createCampaignState();
+  const savedCampaign = snapshot?.campaign || {};
+  state.campaign = {
+    ...nextCampaign,
+    ...savedCampaign,
+    torpedoTubes: cloneTubeBank(savedCampaign.torpedoTubes || nextCampaign.torpedoTubes)
+  };
+  state.stageIndex = clamp(Math.round(snapshot?.stageIndex ?? 0), 0, STAGES.length - 1);
+}
+
+function loadCampaignSnapshot(mode = "manual") {
+  const raw = safeCampaignStorageGet();
+  if (!raw) {
+    if (mode === "manual") {
+      setStatus("保存済みキャンペーンがない。", "warning");
+    }
+    state.saveState.hasSnapshot = false;
+    return false;
+  }
+  try {
+    const snapshot = JSON.parse(raw);
+    applyCampaignSnapshot(snapshot);
+    state.saveState.hasSnapshot = true;
+    state.saveState.lastLoadedAt = Date.now();
+    resetGame();
+    addLog("保存済みキャンペーンを復元。現在ステージ冒頭から再開。");
+    if (mode === "manual") {
+      setStatus("保存済み Campaign Status を再開。", "good");
+    }
+    return true;
+  } catch {
+    state.saveState.hasSnapshot = false;
+    if (mode === "manual") {
+      setStatus("保存データの読み込みに失敗。新規キャンペーンを推奨。", "bad");
+    }
+    return false;
+  }
+}
+
+function startNewCampaign() {
+  if (canUseCampaignStorage()) {
+    try {
+      window.localStorage.removeItem(CAMPAIGN_SAVE_KEY);
+    } catch {
+      // Ignore storage removal failures and still reset in-memory state.
+    }
+  }
+  state.campaign = createCampaignState();
+  state.stageIndex = 0;
+  state.saveState.hasSnapshot = false;
+  state.saveState.lastSavedAt = 0;
+  state.saveState.lastLoadedAt = Date.now();
+  resetGame();
+  addLog("新規キャンペーンを開始。保存済みデータは破棄。");
+  setStatus("新規キャンペーン開始。", "good");
 }
 
 function campaignStatusTone() {
@@ -976,6 +1101,7 @@ function markMissionOutcome(outcomeText, cleared) {
   if (cleared) {
     state.campaign.missionsCleared += 1;
   }
+  saveCampaignSnapshot("auto");
 }
 
 function advanceToStage(nextIndex, note) {
@@ -985,6 +1111,7 @@ function advanceToStage(nextIndex, note) {
   }
   state.stageIndex = clamp(Math.round(nextIndex), 0, STAGES.length - 1);
   resetGame();
+  saveCampaignSnapshot("auto");
 }
 
 function continuePatrolToNextStage() {
@@ -1009,6 +1136,7 @@ function returnToBaseAndResupply(nextIndex = state.stageIndex) {
   resetGame();
   addLog("帰投補給完了。船体修理、電池満充電、全発射管再装填済み。");
   setStatus("帰投補給完了。再出撃可能。", "good");
+  saveCampaignSnapshot("auto");
 }
 
 function queueWolfpackReport(title, detail, tone = "warning") {
@@ -4334,6 +4462,17 @@ function updateButtons() {
   if (campaignReturnButton) {
     setButtonState(campaignReturnButton, "active", state.stageState.cleared);
   }
+  if (campaignSaveButton) {
+    setButtonState(campaignSaveButton, "active", true);
+    campaignSaveButton.title = "現在の Campaign Status を保存。再開時は現在ステージ冒頭から復元。";
+  }
+  if (campaignResumeButton) {
+    setButtonState(campaignResumeButton, "active", state.saveState.hasSnapshot);
+    setButtonState(campaignResumeButton, "dim", !state.saveState.hasSnapshot);
+  }
+  if (campaignNewButton) {
+    setButtonState(campaignNewButton, "active", true);
+  }
   syncStageSelect();
 }
 
@@ -4896,7 +5035,7 @@ function updateHud() {
       ? "任務結果を反映済み。帰投補給で修理・充電・再装填して次哨戒へ移る。"
       : `${state.wolfpack.currentDetail} 現在の持越状態: 船体 ${Math.round(state.campaign.hull)}% / 電池 ${Math.round(
           state.campaign.battery
-        )}% / 予備魚雷 ${state.campaign.reserveTorpedoes || 0} 本。`;
+        )}% / 予備魚雷 ${state.campaign.reserveTorpedoes || 0} 本。保存再開は現在ステージ冒頭から。`;
   }
   alertNode.textContent =
     state.battlePhase === BATTLE_PHASES.alarmDive
@@ -6744,6 +6883,9 @@ function update(deltaTime) {
   syncAudioGraph();
   updateHud();
   updateButtons();
+  if (Date.now() - state.saveState.lastSavedAt > 8000) {
+    saveCampaignSnapshot("auto");
+  }
 }
 
 function toScreen(x, y, camera) {
@@ -8808,6 +8950,16 @@ campaignReturnButton?.addEventListener("click", () => {
   if (!state.stageState.cleared) return;
   returnToBaseAndResupply(nextStageIndex());
 });
+campaignSaveButton?.addEventListener("click", () => {
+  saveCampaignSnapshot("manual");
+  updateButtons();
+});
+campaignResumeButton?.addEventListener("click", () => {
+  if (loadCampaignSnapshot("manual")) {
+    updateButtons();
+  }
+});
+campaignNewButton?.addEventListener("click", startNewCampaign);
 stageSelectNode?.addEventListener("change", () => setStageIndex(Number(stageSelectNode.value)));
 canvas?.addEventListener("click", (event) => {
   if (state.station !== "captain" || state.viewMode !== "periscope") return;
@@ -8855,7 +9007,10 @@ window.addEventListener("keydown", (event) => {
 try {
   drawFatalError("JavaScript loaded. Initializing renderer...");
   ensureVoiceAssignments();
-  resetGame();
+  syncSavePresence();
+  if (!loadCampaignSnapshot("auto")) {
+    resetGame();
+  }
   startFallbackLoop();
   requestAnimationFrame(loop);
 } catch (error) {
