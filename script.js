@@ -4,6 +4,7 @@ const ctx = canvas.getContext("2d");
 const missionNode = document.getElementById("mission-text");
 const stageBannerNode = document.getElementById("stage-banner");
 const stageProgressNode = document.getElementById("stage-progress");
+const stageSelectNode = document.getElementById("stage-select");
 const zoneLabelNode = document.getElementById("zone-label");
 const lightConditionNode = document.getElementById("light-condition");
 const hullNode = document.getElementById("hull");
@@ -3091,6 +3092,14 @@ function currentStage() {
   return STAGES[state.stageIndex] || STAGES[0];
 }
 
+function syncStageSelect() {
+  if (!stageSelectNode) return;
+  const nextValue = String(state.stageIndex);
+  if (stageSelectNode.value !== nextValue) {
+    stageSelectNode.value = nextValue;
+  }
+}
+
 function seedContacts() {
   state.contacts = currentStage().setup().contacts;
 }
@@ -4014,12 +4023,23 @@ function updateButtons() {
         ? "再挑戦"
         : "新任務";
   }
+  syncStageSelect();
 }
 
 function handleRestartAction() {
   if (state.stageState.cleared) {
     state.stageIndex = state.stageIndex < STAGES.length - 1 ? state.stageIndex + 1 : 0;
   }
+  resetGame();
+}
+
+function setStageIndex(nextIndex) {
+  const normalized = clamp(Math.round(nextIndex), 0, STAGES.length - 1);
+  if (normalized === state.stageIndex && state.running) {
+    resetGame();
+    return;
+  }
+  state.stageIndex = normalized;
   resetGame();
 }
 
@@ -8405,6 +8425,7 @@ audioToggleButton?.addEventListener("click", toggleAudio);
 voiceToggleButton?.addEventListener("click", toggleVoiceEnabled);
 voiceModeToggleButton?.addEventListener("click", toggleVoiceMode);
 restartButton?.addEventListener("click", handleRestartAction);
+stageSelectNode?.addEventListener("change", () => setStageIndex(Number(stageSelectNode.value)));
 canvas?.addEventListener("click", (event) => {
   if (state.station !== "captain" || state.viewMode !== "periscope") return;
   const rect = canvas.getBoundingClientRect();

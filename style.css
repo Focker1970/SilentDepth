@@ -140,6 +140,18 @@ body[data-light-condition="night"]::before {
   line-height: 1.1;
 }
 
+.header-select {
+  min-width: 132px;
+  padding: 4px 28px 4px 10px;
+  font-size: 0.74rem;
+  line-height: 1.1;
+  color: var(--text);
+  background: rgba(0, 0, 0, 0.28);
+  border: 1px solid rgba(141, 219, 237, 0.22);
+  border-radius: 999px;
+  appearance: none;
+}
+
 .difficulty-button {
   color: #f7c87a;
   background: rgba(0, 0, 0, 0.3);
