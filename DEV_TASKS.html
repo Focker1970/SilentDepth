@@ -194,7 +194,7 @@
             <li>Phase 2: Alarm Dive の自動進行と成否反映は実装済み。練度や演出の掘り下げが残る</li>
             <li>Phase 3: 録音優先、TTS、テキストフォールバック、復唱テンプレートは実装済み。話者クールダウン等の整理が未完</li>
             <li>Phase 4: 爆雷実体、静粛航行、深深度リスクは実装済み。系統損傷や応急修理が未完</li>
-            <li>Phase 5: ルールベースAI補助と音声キューは進行中。敵艦長AIの本格状態機械は未完</li>
+            <li>Phase 5: 復唱AI、ソナー/航海長助言、駆逐艦戦術AI状態機械までは実装済み。初心者助言と戦闘後レポートが未完</li>
             <li>Phase 6: 戦略層は未着手</li>
           </ul>
         </div>
@@ -366,10 +366,10 @@
           <h3>P1 タスク</h3>
           <ul class="checklist">
             <li><code>AI_SPEC.md</code> を基準に AI領域と非AI領域の責務をコードへ切り分ける</li>
-            <li>敵駆逐艦艦長AIの意思決定レイヤーを作る</li>
-            <li><code>escort_return / investigate_contact / attack_run / lost_contact_search / surface_pursuit</code> を状態化する</li>
+            <li class="done">敵駆逐艦艦長AIの意思決定レイヤーを作る</li>
+            <li class="done"><code>escort_return / investigate_contact / attack_run / lost_contact_search / surface_pursuit</code> を状態化する</li>
             <li class="done">爆雷投下後の <code>acousticJammingFactor</code> を駆逐艦AIの追尾精度低下へ接続する</li>
-            <li>接触喪失時に最終推定位置周辺の探索を行う捜索ロジックを追加する</li>
+            <li class="done">接触喪失時に最終推定位置周辺の探索を行う捜索ロジックを追加する</li>
             <li class="done">クルーSOPベースの半自律行動を作る</li>
             <li class="done">艦長命令に対して各部署が自動で一定範囲まで実行するようにする</li>
             <li class="done">艦内復唱AIの最小版として <code>Alarm!</code> / 接触報告 / 発射準備完了 / 発射 / 損傷報告 をテンプレート化する</li>
@@ -384,8 +384,8 @@
         <div class="card">
           <h3>P2 / P3 タスク</h3>
           <ul class="checklist">
-            <li>敵艦長に <code>慎重</code> <code>aggressive</code> <code>執拗</code> などの性格パラメータを持たせる</li>
-            <li>性格差に応じて護衛復帰優先 / 攻撃走維持 / 接触喪失後の粘りを変化させる</li>
+            <li class="done">敵艦長に <code>慎重</code> <code>aggressive</code> <code>執拗</code> などの性格パラメータを持たせる</li>
+            <li class="done">性格差に応じて護衛復帰優先 / 攻撃走維持 / 接触喪失後の粘りを変化させる</li>
             <li>副長、機関長、ソナー員から短い提案を返す仕組みを追加する</li>
             <li>艦内クルーAIの文言ゆらぎを役職別制約つきで追加する</li>
             <li class="done">ソナー員AIの報告を内部観測段階へ接続する</li>
@@ -403,7 +403,7 @@
             <li>AIが勝手にゲームを解きすぎない</li>
             <li>それでも毎回同じ手順にはならない</li>
             <li>AIが出す情報はプレイヤーが知り得る範囲を超えない</li>
-            <li>駆逐艦が最強追尾装置ではなく、見失いと再捜索の揺らぎを持つ</li>
+            <li class="done">駆逐艦が最強追尾装置ではなく、見失いと再捜索の揺らぎを持つ</li>
             <li>録音 / TTS / テキストのみ のどの構成でも進行不能にならない</li>
           </ul>
         </div>
@@ -416,8 +416,8 @@
           <li class="done">AI-3: 航海長AIの接敵 / 射点形成助言を実装する</li>
           <li class="done">AI-4: 雷撃士AIの Speed / AOB / 発射不可理由補助を実装する</li>
           <li>AI-5: 初心者アドバイザーAIを実装する</li>
-          <li>AI-6: 駆逐艦AIの状態機械を実装する</li>
-          <li>AI-7: 爆雷後ジャミングと接触喪失後探索を駆逐艦AIへ組み込む</li>
+          <li class="done">AI-6: 駆逐艦AIの状態機械を実装する</li>
+          <li class="done">AI-7: 爆雷後ジャミングと接触喪失後探索を駆逐艦AIへ組み込む</li>
           <li>AI-8: 戦闘後レポートAIを実装する</li>
         </ul>
       </div>
@@ -472,7 +472,7 @@
             <li class="done">節目B: 急速潜航が通る</li>
             <li class="done">節目C: 復唱とTTSが通る</li>
             <li>節目D: 爆雷回避が通る</li>
-            <li>節目E: AI駆逐艦が通る</li>
+            <li class="done">節目E: AI駆逐艦が通る</li>
             <li>節目F: キャンペーンへ接続できる</li>
           </ul>
         </div>
