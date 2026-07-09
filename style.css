@@ -708,6 +708,14 @@ canvas {
   flex-direction: column;
 }
 
+.campaign-card {
+  margin-top: 14px;
+}
+
+.campaign-card .button-row {
+  margin-top: 12px;
+}
+
 .alarm-card {
   border-color: rgba(255, 139, 120, 0.2);
   background:

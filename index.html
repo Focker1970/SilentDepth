@@ -465,6 +465,24 @@
             </div>
           </section>
 
+          <div class="console-card campaign-card">
+            <span class="label">Campaign Status</span>
+            <dl class="duty-list compact-duty">
+              <div><dt>累積戦果</dt><dd id="campaign-tonnage">0t / 0隻</dd></div>
+              <div><dt>船体持越</dt><dd id="campaign-hull">100%</dd></div>
+              <div><dt>電池持越</dt><dd id="campaign-battery">100%</dd></div>
+              <div><dt>予備魚雷</dt><dd id="campaign-reserve">9本</dd></div>
+              <div><dt>補給回数</dt><dd id="campaign-resupply">0回</dd></div>
+              <div><dt>状態</dt><dd id="campaign-outcome">出撃準備完了</dd></div>
+            </dl>
+            <div class="button-row single">
+              <button type="button" id="campaign-resupply-button">帰投補給</button>
+            </div>
+            <p id="campaign-note" class="support-text">
+              戦闘で減った船体・電池・予備魚雷を次任務へ持ち越す。帰投補給で再装填と修理を行う。
+            </p>
+          </div>
+
           <section class="console-card log-card">
             <span class="label">Bridge Log</span>
             <ol id="log" class="log"></ol>

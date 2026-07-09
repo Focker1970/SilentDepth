@@ -85,6 +85,14 @@ const navApproachRatingNode = document.getElementById("nav-approach-rating");
 const navHeadingErrorNode = document.getElementById("nav-heading-error");
 const navDepthErrorNode = document.getElementById("nav-depth-error");
 const navPeriscopeStabilityNode = document.getElementById("nav-periscope-stability");
+const campaignTonnageNode = document.getElementById("campaign-tonnage");
+const campaignHullNode = document.getElementById("campaign-hull");
+const campaignBatteryNode = document.getElementById("campaign-battery");
+const campaignReserveNode = document.getElementById("campaign-reserve");
+const campaignResupplyNode = document.getElementById("campaign-resupply");
+const campaignOutcomeNode = document.getElementById("campaign-outcome");
+const campaignNoteNode = document.getElementById("campaign-note");
+const campaignResupplyButton = document.getElementById("campaign-resupply-button");
 
 const pingButton = document.getElementById("ping");
 const captainPingButton = document.getElementById("captain-ping");
@@ -210,6 +218,11 @@ const UBOAT_CLASS = {
   crushDepth: 280,
   torpedoDepthMin: 10,
   torpedoDepthMax: 20
+};
+const TONNAGE_BY_TYPE = {
+  convoy: 4200,
+  flagship: 9000,
+  escort: 1800
 };
 const MAST_HEIGHT = { escort: 14, flagship: 18, convoy: 12 };
 const MAST_K = 1600;
@@ -726,6 +739,25 @@ function createAlarmDiveState() {
   };
 }
 
+function cloneTubeBank(tubes = createTorpedoTubeBank()) {
+  return tubes.map((tube) => ({ ...tube }));
+}
+
+function createCampaignState() {
+  return {
+    tonnageSunk: 0,
+    shipsSunk: 0,
+    missionsCleared: 0,
+    hull: 100,
+    battery: 100,
+    reserveTorpedoes: 9,
+    torpedoTubes: cloneTubeBank(createTorpedoTubeBank()),
+    resupplyCount: 0,
+    readyForResupply: false,
+    lastOutcome: "出撃準備完了"
+  };
+}
+
 const state = {
   running: true,
   time: 0,
@@ -831,6 +863,7 @@ const state = {
     y: 0
   },
   commandIntent: "approach",
+  campaign: createCampaignState(),
   contactTactical: {
     focusContactId: null,
     precision: 0,
@@ -884,6 +917,57 @@ const state = {
 
 function clamp(value, min, max) {
   return Math.max(min, Math.min(max, value));
+}
+
+function campaignStatusTone() {
+  if (state.stageState.cleared) return "任務成功";
+  if (state.stageState.failed) return "戦闘不能";
+  if (state.campaign.readyForResupply) return "補給待ち";
+  return "哨戒継続";
+}
+
+function syncCampaignOperationalState() {
+  const campaign = state.campaign;
+  const sub = state.submarine;
+  if (!campaign || !sub) return;
+  campaign.hull = clamp(sub.hull, 0, 100);
+  campaign.battery = clamp(sub.battery, 0, 100);
+  campaign.reserveTorpedoes = Math.max(0, sub.reserveTorpedoes || 0);
+  campaign.torpedoTubes = cloneTubeBank(sub.torpedoTubes || createTorpedoTubeBank());
+}
+
+function applyCampaignLoadout(stageSubmarine = {}) {
+  const campaign = state.campaign;
+  const defaultTubes = cloneTubeBank(createTorpedoTubeBank());
+  return {
+    ...stageSubmarine,
+    hull: campaign.hull,
+    battery: campaign.battery,
+    reserveTorpedoes: campaign.reserveTorpedoes,
+    torpedoTubes: cloneTubeBank(campaign.torpedoTubes?.length ? campaign.torpedoTubes : defaultTubes)
+  };
+}
+
+function markMissionOutcome(outcomeText, cleared) {
+  syncCampaignOperationalState();
+  state.campaign.readyForResupply = true;
+  state.campaign.lastOutcome = outcomeText;
+  if (cleared) {
+    state.campaign.missionsCleared += 1;
+  }
+}
+
+function returnToBaseAndResupply() {
+  state.campaign.hull = 100;
+  state.campaign.battery = 100;
+  state.campaign.reserveTorpedoes = 9;
+  state.campaign.torpedoTubes = cloneTubeBank(createTorpedoTubeBank());
+  state.campaign.resupplyCount += 1;
+  state.campaign.readyForResupply = false;
+  state.campaign.lastOutcome = "帰投補給完了。再出撃準備よし。";
+  resetGame();
+  addLog("帰投補給完了。船体修理、電池満充電、全発射管再装填済み。");
+  setStatus("帰投補給完了。再出撃可能。", "good");
 }
 
 function randomRange(min, max) {
@@ -4023,6 +4107,21 @@ function updateButtons() {
         ? "再挑戦"
         : "新任務";
   }
+  if (campaignResupplyButton) {
+    campaignResupplyButton.textContent = state.campaign.readyForResupply
+      ? "帰投補給を実施"
+      : "帰投補給";
+    setButtonState(campaignResupplyButton, "active", state.campaign.readyForResupply);
+    setButtonState(
+      campaignResupplyButton,
+      "dim",
+      !state.campaign.readyForResupply && state.running
+    );
+    campaignResupplyButton.title =
+      state.campaign.readyForResupply
+        ? "持越ダメージと残弾を補給・修理して再出撃準備を行う。"
+        : `${campaignStatusTone()}。任務結果確定後に補給を実施できます。`;
+  }
   syncStageSelect();
 }
 
@@ -4481,6 +4580,7 @@ function phaseObjectiveMeta(phase, bestShot) {
 
 function updateHud() {
   const sub = state.submarine;
+  syncCampaignOperationalState();
   const nav = state.navigationTactical;
   const detectedContacts = state.contacts.filter(
     (contact) => !contact.destroyed && contact.detected
@@ -4557,6 +4657,31 @@ function updateHud() {
   speedNode.textContent = `${sub.speed.toFixed(1)}kt`;
   noiseNode.textContent = noiseLabel(sub.noise);
   torpedoesNode.textContent = `${loadedTubeCount(sub)}+${sub.reserveTorpedoes || 0}`;
+  if (campaignTonnageNode) {
+    campaignTonnageNode.textContent = `${state.campaign.tonnageSunk.toLocaleString("ja-JP")}t / ${state.campaign.shipsSunk}隻`;
+  }
+  if (campaignHullNode) {
+    campaignHullNode.textContent = `${Math.round(state.campaign.hull)}%`;
+  }
+  if (campaignBatteryNode) {
+    campaignBatteryNode.textContent = `${Math.round(state.campaign.battery)}%`;
+  }
+  if (campaignReserveNode) {
+    campaignReserveNode.textContent = `${state.campaign.reserveTorpedoes || 0}本`;
+  }
+  if (campaignResupplyNode) {
+    campaignResupplyNode.textContent = `${state.campaign.resupplyCount}回`;
+  }
+  if (campaignOutcomeNode) {
+    campaignOutcomeNode.textContent = state.campaign.lastOutcome;
+  }
+  if (campaignNoteNode) {
+    campaignNoteNode.textContent = state.campaign.readyForResupply
+      ? "任務結果を反映済み。帰投補給で修理・充電・再装填して次哨戒へ移る。"
+      : `現在の持越状態: 船体 ${Math.round(state.campaign.hull)}% / 電池 ${Math.round(
+          state.campaign.battery
+        )}% / 予備魚雷 ${state.campaign.reserveTorpedoes || 0} 本。`;
+  }
   alertNode.textContent =
     state.battlePhase === BATTLE_PHASES.alarmDive
       ? "Alarm"
@@ -5073,6 +5198,7 @@ function resetGame() {
   state.torpedoesInWater = [];
   state.depthChargesInWater = [];
   state.escapeZone = { ...stageSetup.escapeZone };
+  const sortieSubmarine = applyCampaignLoadout(stageSetup.submarine);
   state.submarine = {
     x: 1800,
     y: 5200,
@@ -5089,9 +5215,9 @@ function resetGame() {
     torpedoTubes: createTorpedoTubeBank(),
     detection: 0.1,
     trail: [],
-    ...stageSetup.submarine,
-    torpedoTubes: stageSetup.submarine?.torpedoTubes || createTorpedoTubeBank(),
-    reserveTorpedoes: stageSetup.submarine?.reserveTorpedoes ?? 9
+    ...sortieSubmarine,
+    torpedoTubes: cloneTubeBank(sortieSubmarine.torpedoTubes || createTorpedoTubeBank()),
+    reserveTorpedoes: sortieSubmarine.reserveTorpedoes ?? 9
   };
   const visibleWorldWidth = canvas.width / TACTICAL_PLOT_SCALE;
   const visibleWorldHeight = canvas.height / TACTICAL_PLOT_SCALE;
@@ -5119,6 +5245,11 @@ function resetGame() {
   updateDetectionState();
   updateSubmergedLoop();
   addLog(stage.introLog);
+  addLog(
+    `持越状態: 船体 ${Math.round(state.submarine.hull)}% / 電池 ${Math.round(
+      state.submarine.battery
+    )}% / 予備魚雷 ${state.submarine.reserveTorpedoes || 0} 本。`
+  );
   addLog(
     `艦型 ${UBOAT_CLASS.name} / 全長 ${UBOAT_CLASS.lengthMeters}m / 実用深度 ${UBOAT_CLASS.practicalDepth}m。`
   );
@@ -6059,6 +6190,8 @@ function resolveTorpedoHit(contact) {
     contact.visualDetected = false;
     contact.sonarDetected = false;
     contact.detectionSource = null;
+    state.campaign.tonnageSunk += TONNAGE_BY_TYPE[contact.type] || 0;
+    state.campaign.shipsSunk += 1;
     addLog(`${contactLabel(contact)} 撃沈。`);
     setStatus(`${contactLabel(contact)} を撃沈。`, "good");
   } else {
@@ -6178,6 +6311,7 @@ function updateMission() {
       failed: false,
       message: stageOutcome.successStatus
     };
+    markMissionOutcome(stageOutcome.successStatus, true);
     addLog(stageOutcome.successLog);
     setStatus(stageOutcome.successStatus, "good");
   }
@@ -6189,6 +6323,7 @@ function updateMission() {
       failed: true,
       message: `${stage.name} 失敗。再挑戦。`
     };
+    markMissionOutcome(`${stage.name} 失敗。帰投補給が必要。`, false);
     addLog("船体限界。任務失敗。");
     setStatus("潜水艦は戦闘不能。", "bad");
   }
@@ -8425,6 +8560,13 @@ audioToggleButton?.addEventListener("click", toggleAudio);
 voiceToggleButton?.addEventListener("click", toggleVoiceEnabled);
 voiceModeToggleButton?.addEventListener("click", toggleVoiceMode);
 restartButton?.addEventListener("click", handleRestartAction);
+campaignResupplyButton?.addEventListener("click", () => {
+  if (!state.campaign.readyForResupply) {
+    setStatus("補給は任務終了後に実施できます。", "warning");
+    return;
+  }
+  returnToBaseAndResupply();
+});
 stageSelectNode?.addEventListener("change", () => setStageIndex(Number(stageSelectNode.value)));
 canvas?.addEventListener("click", (event) => {
   if (state.station !== "captain" || state.viewMode !== "periscope") return;
