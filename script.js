@@ -90,6 +90,7 @@ const campaignHullNode = document.getElementById("campaign-hull");
 const campaignBatteryNode = document.getElementById("campaign-battery");
 const campaignReserveNode = document.getElementById("campaign-reserve");
 const campaignResupplyNode = document.getElementById("campaign-resupply");
+const campaignWolfpackNode = document.getElementById("campaign-wolfpack");
 const campaignOutcomeNode = document.getElementById("campaign-outcome");
 const campaignNoteNode = document.getElementById("campaign-note");
 const campaignResupplyButton = document.getElementById("campaign-resupply-button");
@@ -758,6 +759,17 @@ function createCampaignState() {
   };
 }
 
+function createWolfpackState() {
+  return {
+    enabled: false,
+    events: [],
+    nextEventIndex: 0,
+    currentReport: "待機",
+    currentDetail: "群狼作戦イベントなし。",
+    reportTimer: 0
+  };
+}
+
 const state = {
   running: true,
   time: 0,
@@ -864,6 +876,7 @@ const state = {
   },
   commandIntent: "approach",
   campaign: createCampaignState(),
+  wolfpack: createWolfpackState(),
   contactTactical: {
     focusContactId: null,
     precision: 0,
@@ -968,6 +981,157 @@ function returnToBaseAndResupply() {
   resetGame();
   addLog("帰投補給完了。船体修理、電池満充電、全発射管再装填済み。");
   setStatus("帰投補給完了。再出撃可能。", "good");
+}
+
+function queueWolfpackReport(title, detail, tone = "warning") {
+  state.wolfpack.currentReport = title;
+  state.wolfpack.currentDetail = detail;
+  state.wolfpack.reportTimer = 42;
+  addLog(`群狼電文: ${detail}`);
+  setStatus(detail, tone);
+}
+
+function createWolfpackEvents(stage) {
+  if (stage.id !== "convoy_assault") {
+    return [];
+  }
+  return [
+    {
+      id: "hq_contact_report",
+      at: randomRange(70, 120),
+      type: "hq_contact_report"
+    },
+    {
+      id: "escort_diversion",
+      at: randomRange(150, 235),
+      type: "escort_diversion"
+    },
+    {
+      id: "allied_attack",
+      at: randomRange(250, 360),
+      type: "allied_attack"
+    }
+  ].sort((a, b) => a.at - b.at);
+}
+
+function initWolfpackState(stage) {
+  state.wolfpack = createWolfpackState();
+  if (stage.id !== "convoy_assault") {
+    state.wolfpack.currentReport = "訓練海域";
+    state.wolfpack.currentDetail = "群狼作戦イベントなし。";
+    return;
+  }
+  state.wolfpack.enabled = true;
+  state.wolfpack.events = createWolfpackEvents(stage);
+  state.wolfpack.currentReport = "群狼待機";
+  state.wolfpack.currentDetail = "BdU と僚艦の電文待ち。";
+}
+
+function reinforceObservedContact(contact) {
+  const observed = getOrCreateObserved(contact.id);
+  const now = state.time;
+  observed.suspectedType = contact.type;
+  observed.identified = true;
+  observed.identifyConfidence = 0.92;
+  observed.intelStage = Math.max(observed.intelStage || 1, 4);
+  observed.lastRange = Math.round(distance(state.submarine, contact) / 50) * 50;
+  observed.rangeBand = sonarRangeBandLabel(observed.lastRange);
+  observed.estimatedSpeed = Math.round(contact.speed * 2) / 2;
+  observed.estimatedHeading = ((Math.round(contact.heading / 10) * 10) % 360 + 360) % 360;
+  observed.lastSeenTime = now;
+  observed.bearingLog = [
+    { time: now - 18, bearing: bearing(state.submarine, contact), subX: state.submarine.x, subY: state.submarine.y, contactX: contact.x, contactY: contact.y, visual: false },
+    { time: now - 12, bearing: bearing(state.submarine, contact), subX: state.submarine.x, subY: state.submarine.y, contactX: contact.x, contactY: contact.y, visual: false },
+    { time: now - 6, bearing: bearing(state.submarine, contact), subX: state.submarine.x, subY: state.submarine.y, contactX: contact.x, contactY: contact.y, visual: false },
+    { time: now, bearing: bearing(state.submarine, contact), subX: state.submarine.x, subY: state.submarine.y, contactX: contact.x, contactY: contact.y, visual: false }
+  ];
+}
+
+function applyWolfpackEvent(event) {
+  if (event.type === "hq_contact_report") {
+    const target = state.contacts.find((contact) => contact.type === "flagship" && !contact.destroyed)
+      || state.contacts.find((contact) => !contact.hostile && !contact.destroyed)
+      || null;
+    if (!target) return;
+    reinforceObservedContact(target);
+    queueWolfpackReport(
+      "司令部接触電文",
+      `BdU 報: ${contactLabel(target)} 推定 ${Math.round(distance(state.submarine, target))}m、針路 ${formatHeading(target.heading)}。接触整理を急げ。`,
+      "good"
+    );
+    return;
+  }
+
+  if (event.type === "escort_diversion") {
+    const escort = state.contacts.find((contact) => contact.type === "escort" && !contact.destroyed) || null;
+    const protectedShip = state.contacts.find((contact) => contact.type === "flagship" && !contact.destroyed)
+      || state.contacts.find((contact) => contact.type === "convoy" && !contact.destroyed)
+      || null;
+    if (!escort || !protectedShip) return;
+    const diversionHeading = normalizeAngle(protectedShip.heading + chooseRandom([-85, 85]));
+    escort.wolfpackDetachedUntil = state.time + randomRange(85, 130);
+    escort.wolfpackDetachPoint = {
+      x: clamp(protectedShip.x + Math.cos(toRadians(diversionHeading)) * 1100, 40, WORLD.width - 40),
+      y: clamp(protectedShip.y + Math.sin(toRadians(diversionHeading)) * 1100, 40, WORLD.height - 40)
+    };
+    escort.alert = clamp(escort.alert - 0.12, 0.08, 1);
+    queueWolfpackReport(
+      "護衛転進",
+      "僚艦接触の報で護衛1隻が転進。船団外縁に接近する隙が生じた。",
+      "good"
+    );
+    return;
+  }
+
+  if (event.type === "allied_attack") {
+    const candidateTargets = state.contacts.filter(
+      (contact) => !contact.hostile && !contact.destroyed && contact.type !== "flagship"
+    );
+    const target =
+      chooseRandom(candidateTargets.length ? candidateTargets : state.contacts.filter(
+        (contact) => !contact.hostile && !contact.destroyed
+      ));
+    if (!target) return;
+    target.hp -= 1;
+    if (target.hp <= 0) {
+      target.destroyed = true;
+      target.detected = false;
+      target.visualDetected = false;
+      target.sonarDetected = false;
+      target.detectionSource = null;
+    }
+    for (const escort of state.contacts.filter((contact) => contact.hostile && !contact.destroyed)) {
+      escort.alert = clamp(escort.alert + 0.18, 0, 1);
+      escort.chaseModeTimer = Math.max(escort.chaseModeTimer || 0, 28);
+    }
+    queueWolfpackReport(
+      "僚艦雷撃成功",
+      target.destroyed
+        ? `僚艦が ${contactLabel(target)} を撃沈。護衛は広域警戒へ移行。`
+        : `僚艦が ${contactLabel(target)} に命中。護衛警戒が一段上がった。`,
+      "warning"
+    );
+  }
+}
+
+function updateWolfpackEvents(deltaTime) {
+  if (!state.wolfpack.enabled) return;
+
+  if (state.wolfpack.reportTimer > 0) {
+    state.wolfpack.reportTimer = Math.max(0, state.wolfpack.reportTimer - deltaTime);
+    if (state.wolfpack.reportTimer === 0) {
+      state.wolfpack.currentReport = "群狼待機";
+      state.wolfpack.currentDetail = "次の僚艦電文を待機。";
+    }
+  }
+
+  while (
+    state.wolfpack.nextEventIndex < state.wolfpack.events.length &&
+    state.time >= state.wolfpack.events[state.wolfpack.nextEventIndex].at
+  ) {
+    applyWolfpackEvent(state.wolfpack.events[state.wolfpack.nextEventIndex]);
+    state.wolfpack.nextEventIndex += 1;
+  }
 }
 
 function randomRange(min, max) {
@@ -2823,6 +2987,8 @@ function createContact(type, overrides = {}) {
     aiDecisionCooldown: randomRange(1.1, 2.4),
     searchCenter: null,
     searchHeading: randomRange(0, 360),
+    wolfpackDetachedUntil: 0,
+    wolfpackDetachPoint: null,
     escortPersonality,
     ...overrides
   };
@@ -2912,6 +3078,9 @@ function evaluateEscortIntent(contact, sub, range, hearsSub, jam, surfaced) {
 }
 
 function escortIntentLabel(intent) {
+  if (intent === "wolfpack_detached") {
+    return "転進";
+  }
   switch (intent) {
     case ESCORT_AI_INTENTS.attackRun:
       return "攻撃走";
@@ -4672,13 +4841,16 @@ function updateHud() {
   if (campaignResupplyNode) {
     campaignResupplyNode.textContent = `${state.campaign.resupplyCount}回`;
   }
+  if (campaignWolfpackNode) {
+    campaignWolfpackNode.textContent = state.wolfpack.currentReport;
+  }
   if (campaignOutcomeNode) {
     campaignOutcomeNode.textContent = state.campaign.lastOutcome;
   }
   if (campaignNoteNode) {
     campaignNoteNode.textContent = state.campaign.readyForResupply
       ? "任務結果を反映済み。帰投補給で修理・充電・再装填して次哨戒へ移る。"
-      : `現在の持越状態: 船体 ${Math.round(state.campaign.hull)}% / 電池 ${Math.round(
+      : `${state.wolfpack.currentDetail} 現在の持越状態: 船体 ${Math.round(state.campaign.hull)}% / 電池 ${Math.round(
           state.campaign.battery
         )}% / 予備魚雷 ${state.campaign.reserveTorpedoes || 0} 本。`;
   }
@@ -5131,6 +5303,7 @@ function resetGame() {
   state.commandIntent = "approach";
   state.battlePhase = BATTLE_PHASES.patrol;
   state.battlePhaseEnteredAt = 0;
+  initWolfpackState(stage);
   state.alarmDive = createAlarmDiveState();
   syncCaptainAlarmCard();
   state.binocularAttackState = "blocked";
@@ -5991,8 +6164,14 @@ function updateContacts(deltaTime) {
       const intent = contact.aiIntent || ESCORT_AI_INTENTS.escortReturn;
       let desiredHeading = contact.heading;
       let speedTarget = 3.8;
+      const detachedByWolfpack =
+        (contact.wolfpackDetachedUntil || 0) > state.time && contact.wolfpackDetachPoint;
 
-      if (intent === ESCORT_AI_INTENTS.attackRun) {
+      if (detachedByWolfpack) {
+        desiredHeading = bearing(contact, contact.wolfpackDetachPoint);
+        speedTarget = 6.1;
+        contact.alert = clamp(contact.alert - deltaTime * 0.018, 0.12, 1);
+      } else if (intent === ESCORT_AI_INTENTS.attackRun) {
         desiredHeading = bearing(contact, sub);
         speedTarget = chaseMode ? 6.4 : 5.4;
         contact.alert = clamp(contact.alert + deltaTime * 0.08 + sub.noise * 0.01 - jam * 0.03, 0, 1);
@@ -6058,6 +6237,7 @@ function updateContacts(deltaTime) {
         contact.attackCooldown <= 0 &&
         range < attackRange &&
         !surfaced &&
+        !detachedByWolfpack &&
         (intent === ESCORT_AI_INTENTS.attackRun || intent === ESCORT_AI_INTENTS.surfacePursuit) &&
         contact.alert > (chaseMode ? 0.52 : 0.64)
       ) {
@@ -6497,6 +6677,7 @@ function update(deltaTime) {
   state.pingCooldown = Math.max(0, state.pingCooldown - deltaTime);
   updatePostAttackDecision(deltaTime);
   updateBinocularAttackState(deltaTime);
+  updateWolfpackEvents(deltaTime);
   updateSubmarine(deltaTime);
   updateNavigationTacticalState();
   updateTorpedoPreparation(deltaTime);
@@ -6718,7 +6899,11 @@ function drawContacts(camera) {
           ? "#ffd57c"
           : "#9bd9a5";
     const chaseMode = (contact.chaseModeTimer || 0) > 0;
-    const escortIntentText = contact.hostile ? escortIntentLabel(contact.aiIntent) : null;
+    const escortIntentText = contact.hostile
+      ? escortIntentLabel(
+          (contact.wolfpackDetachedUntil || 0) > state.time ? "wolfpack_detached" : contact.aiIntent
+        )
+      : null;
     const focusedOpticsTarget =
       state.station === "captain" &&
       state.viewMode === "binocular" &&
@@ -7054,7 +7239,10 @@ function drawOverlay() {
       ? Math.max(...escortContacts.map((contact) => contact.alert))
       : 0;
     const escortIntentCounts = escortContacts.reduce((counts, contact) => {
-      const key = contact.aiIntent || ESCORT_AI_INTENTS.escortReturn;
+      const key =
+        (contact.wolfpackDetachedUntil || 0) > state.time
+          ? "wolfpack_detached"
+          : contact.aiIntent || ESCORT_AI_INTENTS.escortReturn;
       counts[key] = (counts[key] || 0) + 1;
       return counts;
     }, {});
@@ -7159,6 +7347,7 @@ function drawOverlay() {
       meterY + 68
     );
     const escortIntentSummary = [
+      escortIntentCounts.wolfpack_detached ? `転進 ${escortIntentCounts.wolfpack_detached}` : null,
       escortIntentCounts[ESCORT_AI_INTENTS.attackRun] ? `攻撃走 ${escortIntentCounts[ESCORT_AI_INTENTS.attackRun]}` : null,
       escortIntentCounts[ESCORT_AI_INTENTS.lostContactSearch] ? `捜索 ${escortIntentCounts[ESCORT_AI_INTENTS.lostContactSearch]}` : null,
       escortIntentCounts[ESCORT_AI_INTENTS.investigateContact] ? `確認 ${escortIntentCounts[ESCORT_AI_INTENTS.investigateContact]}` : null,
