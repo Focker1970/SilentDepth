@@ -1,0 +1,821 @@
+<!DOCTYPE html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>SilentDepth AI実装仕様</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        --bg-top: #05131d;
+        --bg-bottom: #102b3c;
+        --panel: rgba(7, 21, 31, 0.84);
+        --panel-border: rgba(139, 220, 241, 0.16);
+        --text: #edf8fb;
+        --muted: #a8c0cb;
+        --accent: #dffbff;
+        --accent-soft: #8bdcf1;
+        --warning: #ffd47b;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        min-height: 100vh;
+        font-family: "Avenir Next", "Hiragino Sans", sans-serif;
+        color: var(--text);
+        background:
+          radial-gradient(circle at top, rgba(139, 220, 241, 0.14), transparent 26%),
+          linear-gradient(180deg, var(--bg-bottom), var(--bg-top));
+      }
+
+      body::before {
+        content: "";
+        position: fixed;
+        inset: 0;
+        background-image:
+          linear-gradient(rgba(255, 255, 255, 0.03) 1px, transparent 1px),
+          linear-gradient(90deg, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
+        background-size: 42px 42px;
+        opacity: 0.16;
+        pointer-events: none;
+      }
+
+      main {
+        position: relative;
+        z-index: 1;
+        max-width: 1320px;
+        margin: 0 auto;
+        padding: 24px;
+      }
+
+      .hero,
+      .section {
+        border: 1px solid var(--panel-border);
+        border-radius: 28px;
+        background: var(--panel);
+        backdrop-filter: blur(12px);
+        box-shadow: 0 24px 70px rgba(0, 0, 0, 0.28);
+      }
+
+      .hero {
+        padding: 30px;
+      }
+
+      .section {
+        padding: 24px;
+      }
+
+      .stack {
+        display: grid;
+        gap: 20px;
+        margin-top: 20px;
+      }
+
+      .eyebrow {
+        margin: 0 0 10px;
+        color: var(--accent-soft);
+        text-transform: uppercase;
+        letter-spacing: 0.18em;
+      }
+
+      h1,
+      h2,
+      h3,
+      p {
+        margin-top: 0;
+      }
+
+      h1 {
+        margin-bottom: 12px;
+        font-size: clamp(2.6rem, 8vw, 4.6rem);
+        line-height: 0.96;
+      }
+
+      h2 {
+        margin-bottom: 14px;
+        font-size: 1.6rem;
+      }
+
+      h3 {
+        margin-bottom: 10px;
+        font-size: 1.12rem;
+        color: var(--accent);
+      }
+
+      p,
+      li {
+        line-height: 1.8;
+        color: var(--muted);
+      }
+
+      ul,
+      ol {
+        margin: 0;
+        padding-left: 22px;
+      }
+
+      li + li {
+        margin-top: 6px;
+      }
+
+      code {
+        padding: 2px 6px;
+        border-radius: 8px;
+        background: rgba(255, 255, 255, 0.08);
+        color: var(--text);
+        font-family: "SFMono-Regular", Consolas, monospace;
+      }
+
+      .pill {
+        display: inline-block;
+        margin-top: 10px;
+        padding: 8px 12px;
+        border-radius: 999px;
+        background: rgba(139, 220, 241, 0.12);
+        color: var(--accent);
+      }
+
+      .grid {
+        display: grid;
+        gap: 16px;
+      }
+
+      .grid.two {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+
+      .grid.three {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+      }
+
+      .card {
+        padding: 18px;
+        border-radius: 20px;
+        background: rgba(255, 255, 255, 0.04);
+        border: 1px solid rgba(255, 255, 255, 0.05);
+      }
+
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-top: 12px;
+        overflow: hidden;
+        border-radius: 18px;
+        background: rgba(255, 255, 255, 0.03);
+      }
+
+      th,
+      td {
+        padding: 12px 14px;
+        text-align: left;
+        vertical-align: top;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+      }
+
+      th {
+        color: var(--accent);
+        background: rgba(139, 220, 241, 0.08);
+        font-weight: 700;
+      }
+
+      tr:last-child td {
+        border-bottom: 0;
+      }
+
+      .table-wrap {
+        overflow-x: auto;
+      }
+
+      .section-note {
+        margin-top: 12px;
+        color: var(--warning);
+      }
+
+      @media (max-width: 980px) {
+        .grid.two,
+        .grid.three {
+          grid-template-columns: 1fr;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <section class="hero">
+        <p class="eyebrow">SilentDepth AI Specification</p>
+        <h1>SilentDepth AI実装仕様</h1>
+        <p>
+          <code>SilentDepth</code> における AI 利用領域を定義し、敵艦の判断、艦内クルーの復唱と報告、
+          プレイヤー支援、戦闘後要約をどこまで AI に担わせるかを実装向けに整理した資料。
+        </p>
+        <div class="pill">AI は物理計算の代替ではなく 判断・報告・演出・要約 の強化に使う</div>
+      </section>
+
+      <div class="stack">
+        <section class="section">
+          <h2>概要</h2>
+          <p>目的は次の4点。</p>
+          <ol>
+            <li><code>敵艦行動</code> を単純追尾ではなく戦術判断として表現する</li>
+            <li><code>艦内クルー報告</code> を状況に応じた自然な情報伝達へ拡張する</li>
+            <li><code>プレイヤー支援</code> を初心者補助とヒストリカル補助の両立として実装する</li>
+            <li><code>AIに任せる領域</code> と <code>通常ロジックで固定すべき領域</code> を分離する</li>
+          </ol>
+        </section>
+
+        <section class="section">
+          <h2>AI利用方針</h2>
+          <div class="grid two">
+            <div class="card">
+              <h3>原則</h3>
+              <ul>
+                <li><code>毎フレーム処理</code> は AI に任せない</li>
+                <li><code>命中判定</code> <code>深度計算</code> <code>速度計算</code> <code>ソナー強度</code> は従来ロジックで保持する</li>
+                <li>AI は <code>イベント発生時</code> <code>報告生成時</code> <code>行動選択時</code> に限定する</li>
+                <li>AI 出力は必ず <code>ゲーム内部状態をもとにした制約付き出力</code> にする</li>
+              </ul>
+            </div>
+            <div class="card">
+              <h3>AIを使う / 使わない領域</h3>
+              <div class="grid">
+                <div>
+                  <p><strong>使うべき領域</strong></p>
+                  <ul>
+                    <li>敵駆逐艦の戦術判断</li>
+                    <li>艦内クルーの命令復唱と状況報告</li>
+                    <li>航海長 / ソナー員 / 雷撃士の補助進言</li>
+                    <li>戦闘後のログ要約</li>
+                  </ul>
+                </div>
+                <div>
+                  <p><strong>使わない領域</strong></p>
+                  <ul>
+                    <li>船体移動</li>
+                    <li>魚雷会敵</li>
+                    <li>爆雷沈降</li>
+                    <li>バッテリー消耗</li>
+                    <li>観測段階ゲージの内部進行</li>
+                    <li>TDC 数学処理</li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section class="section">
+          <h2>AIシステム構成</h2>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>系統</th>
+                  <th>名称</th>
+                  <th>主用途</th>
+                  <th>呼び出し頻度</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>敵AI</td>
+                  <td><code>Destroyer Tactical AI</code></td>
+                  <td>駆逐艦の追跡 / 捜索 / 攻撃方針決定</td>
+                  <td>数秒ごと</td>
+                </tr>
+                <tr>
+                  <td>艦内AI</td>
+                  <td><code>Crew Voice AI</code></td>
+                  <td>命令復唱、部署報告、状況通話</td>
+                  <td>イベントごと</td>
+                </tr>
+                <tr>
+                  <td>支援AI</td>
+                  <td><code>Tactical Advisor AI</code></td>
+                  <td>航海長 / ソナー / 雷撃の助言生成</td>
+                  <td>状況更新ごと</td>
+                </tr>
+                <tr>
+                  <td>記録AI</td>
+                  <td><code>After Action AI</code></td>
+                  <td>戦闘要約、艦長日誌、失敗理由整理</td>
+                  <td>ミッション終了時</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <section class="section">
+          <h2>1. 敵駆逐艦AI仕様</h2>
+          <div class="grid two">
+            <div class="card">
+              <h3>目的 / 入力 / 出力</h3>
+              <p>駆逐艦を <code>常時正解追尾する最強敵</code> ではなく、<code>情報が不完全な中で判断する指揮官</code> として表現する。</p>
+              <p><strong>入力</strong></p>
+              <ul>
+                <li>自艦の最終探知情報</li>
+                <li>受動聴音結果</li>
+                <li>能動ソナー結果</li>
+                <li>直前の爆雷投下結果</li>
+                <li>味方輸送船団との距離</li>
+                <li>自艦が浮上中か潜航中か</li>
+                <li>昼夜 / 海象 / 爆雷ジャミング状態</li>
+              </ul>
+              <p><strong>出力</strong></p>
+              <ul>
+                <li>行動モード</li>
+                <li>次の目標針路</li>
+                <li>次の目標速力</li>
+                <li>爆雷投下可否</li>
+                <li>能動探知可否</li>
+              </ul>
+            </div>
+            <div class="card">
+              <h3>AI判断ルール / 実装方式</h3>
+              <ul>
+                <li>爆雷投下後は <code>acousticJammingFactor</code> を考慮し、一定時間は追尾精度を落とす</li>
+                <li>接触喪失時は正解位置へ向かわず、<code>最終推定位置</code> 周辺を探索する</li>
+                <li>夜間の双眼鏡浮上攻撃は、距離と警戒度が低ければ見逃す可能性を持たせる</li>
+                <li>護衛艦は単艦撃沈より <code>船団防護</code> を優先する</li>
+                <li>1〜3秒ごとの更新で <code>state.contacts[i].aiIntent</code> を再計算する</li>
+                <li>実際の移動は既存 <code>updateContacts()</code> ロジックで処理する</li>
+                <li>AI は <code>intent</code> と <code>priority</code> のみ返す</li>
+              </ul>
+            </div>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>モード</th>
+                  <th>概要</th>
+                  <th>典型行動</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>escort_return</code></td>
+                  <td>護衛配置へ戻る</td>
+                  <td>船団付近を低速警戒</td>
+                </tr>
+                <tr>
+                  <td><code>investigate_contact</code></td>
+                  <td>断続接触の確認</td>
+                  <td>最終探知方位へ接近</td>
+                </tr>
+                <tr>
+                  <td><code>attack_run</code></td>
+                  <td>攻撃走に入る</td>
+                  <td>高速接近、爆雷投下</td>
+                </tr>
+                <tr>
+                  <td><code>lost_contact_search</code></td>
+                  <td>接触喪失後の捜索</td>
+                  <td>扇形捜索、速度低下</td>
+                </tr>
+                <tr>
+                  <td><code>surface_pursuit</code></td>
+                  <td>浮上Uボートへの追撃</td>
+                  <td>見失うまで水上追尾</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <section class="section">
+          <h2>2. 艦内クルーAI仕様</h2>
+          <div class="grid two">
+            <div class="card">
+              <h3>目的 / 対象役職 / 主用途</h3>
+              <p>艦内の命令伝達を、単純な固定文ではなく <code>状況に即した復唱</code> として表現する。</p>
+              <p><strong>対象役職</strong></p>
+              <ul>
+                <li>艦長</li>
+                <li>当直将校</li>
+                <li>ソナー員</li>
+                <li>航海長</li>
+                <li>雷撃士</li>
+                <li>機関部</li>
+                <li>見張り員</li>
+              </ul>
+              <p><strong>主用途</strong></p>
+              <ul>
+                <li><code>Alarm!</code> 発令時のドイツ語復唱</li>
+                <li>接触報告の自然文生成</li>
+                <li>発射準備完了報告</li>
+                <li>被害報告</li>
+                <li>離脱時の簡易会話</li>
+              </ul>
+            </div>
+            <div class="card">
+              <h3>入力 / 出力 / 実装方針</h3>
+              <p><strong>入力</strong></p>
+              <ul>
+                <li>現在フェーズ</li>
+                <li>担当役職</li>
+                <li>直前命令</li>
+                <li>接触情報</li>
+                <li>射撃解の状態</li>
+                <li>損傷状態</li>
+                <li>音声モード <code>recorded</code> / <code>tts</code></li>
+              </ul>
+              <p><strong>出力</strong></p>
+              <ul>
+                <li>日本語内部タグ</li>
+                <li>ドイツ語表示テキスト</li>
+                <li>音声再生キュー</li>
+              </ul>
+              <p><strong>実装方針</strong></p>
+              <ul>
+                <li>基本は <code>テンプレート + 変数埋め込み</code></li>
+                <li>AI は文言のゆらぎ生成と状況に応じた短文化に使う</li>
+                <li>役職別に語彙制限を設け、史実感を崩さない</li>
+              </ul>
+            </div>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>状況</th>
+                  <th>役職</th>
+                  <th>出力例</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>Alarm 発令</td>
+                  <td>当直将校</td>
+                  <td><code>Alarm! Tauchen!</code></td>
+                </tr>
+                <tr>
+                  <td>ハッチ閉鎖完了</td>
+                  <td>見張り員</td>
+                  <td><code>Brueckenluke geschlossen!</code></td>
+                </tr>
+                <tr>
+                  <td>ソナー接触</td>
+                  <td>ソナー員</td>
+                  <td><code>Geraeuschkontakt Steuerbord voraus.</code></td>
+                </tr>
+                <tr>
+                  <td>発射準備完了</td>
+                  <td>雷撃士</td>
+                  <td><code>Rohr eins klar.</code></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <section class="section">
+          <h2>3. ソナー員AI仕様</h2>
+          <div class="grid two">
+            <div class="card">
+              <h3>目的 / 入力 / 出力</h3>
+              <p>ソナー観測の内部値を、そのまま出すのではなく <code>観測段階に応じた報告</code> としてプレイヤーへ伝える。</p>
+              <p><strong>入力</strong></p>
+              <ul>
+                <li><code>observedContacts</code></li>
+                <li><code>intelStage</code></li>
+                <li>接触強度</li>
+                <li>方位変化</li>
+                <li>推定速度</li>
+                <li>推定針路</li>
+                <li>目標種別推定</li>
+              </ul>
+              <p><strong>出力</strong></p>
+              <ul>
+                <li>短報</li>
+                <li>詳報</li>
+                <li>艦種推定</li>
+                <li>信頼度</li>
+              </ul>
+            </div>
+            <div class="card">
+              <h3>実装例</h3>
+              <ul>
+                <li><code>方位 40度、微弱接触</code></li>
+                <li><code>右舷前方、距離は遠い。低速商船らしい</code></li>
+                <li><code>方位一定、速力 3 ノット前後、針路 010 度と推定</code></li>
+              </ul>
+            </div>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>段階</th>
+                  <th>AIが言ってよい情報</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>方位段階</td>
+                  <td>方位のみ</td>
+                </tr>
+                <tr>
+                  <td>距離段階</td>
+                  <td>おおまかな距離帯</td>
+                </tr>
+                <tr>
+                  <td>速度段階</td>
+                  <td>遅い / 中速 / 高速、または kt 推定</td>
+                </tr>
+                <tr>
+                  <td>針路段階</td>
+                  <td>進行方位推定、艦種推定</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <section class="section">
+          <h2>4. 航海長AI仕様</h2>
+          <div class="grid two">
+            <div class="card">
+              <h3>目的 / 入力 / 出力</h3>
+              <p>索敵から射点形成までの操艦を、プレイヤーに理解しやすい形で助言する。</p>
+              <p><strong>入力</strong></p>
+              <ul>
+                <li>自艦位置、深度、速力、針路</li>
+                <li>敵推定位置、推定針路、推定速力</li>
+                <li>現在の艦長意図</li>
+                <li><code>battlePhase</code></li>
+                <li>潜望鏡深度維持状態</li>
+              </ul>
+              <p><strong>出力</strong></p>
+              <ul>
+                <li>推奨針路</li>
+                <li>推奨速力</li>
+                <li>推奨深度</li>
+                <li>理由テキスト</li>
+                <li><code>射点形成中 / 回り込み不足 / 先手維持 / 離脱優先</code> の評価</li>
+              </ul>
+            </div>
+            <div class="card">
+              <h3>AI助言ルール</h3>
+              <ul>
+                <li>ソナー接触のみの段階では <code>前方回り込み</code> を優先</li>
+                <li>潜望鏡観測が成立したら <code>射点安定</code> を優先</li>
+                <li>護衛急接近時は <code>回避優先</code> に切替</li>
+                <li>進言は短く、HUDに収まる長さへ制限する</li>
+              </ul>
+            </div>
+          </div>
+        </section>
+
+        <section class="section">
+          <h2>5. 雷撃士AI仕様</h2>
+          <div class="grid two">
+            <div class="card">
+              <h3>目的 / 入力 / 出力</h3>
+              <p>ヒストリカルモードでプレイヤーの計算負荷を完全自動化せず、<code>不足要素の説明</code> と <code>補助推定</code> に限定して支援する。</p>
+              <p><strong>入力</strong></p>
+              <ul>
+                <li>TDC 現在値</li>
+                <li>目標選定中の接触</li>
+                <li>潜望鏡観測ログ</li>
+                <li>ソナー推定</li>
+                <li>現在の射点幾何</li>
+              </ul>
+              <p><strong>出力</strong></p>
+              <ul>
+                <li><code>Speed 推定補助</code></li>
+                <li><code>AOB 推定補助</code></li>
+                <li><code>発射不可理由</code></li>
+                <li><code>再入力不要 / 再準備必要</code></li>
+              </ul>
+            </div>
+            <div class="card">
+              <h3>典型出力 / 注意点</h3>
+              <ul>
+                <li><code>速度推定は 2.8kt、潜望鏡追尾 9 秒より算出</code></li>
+                <li><code>AOB 推定は +35、艦影の向きから低信頼</code></li>
+                <li><code>進角不足。もう少し前方へ回り込む必要あり</code></li>
+              </ul>
+              <p class="section-note">命中可否の最終判定は既存ロジックで行い、AI はあくまで <code>説明役</code> にとどめる。</p>
+            </div>
+          </div>
+        </section>
+
+        <section class="section">
+          <h2>6. 初心者アドバイザーAI仕様</h2>
+          <div class="grid two">
+            <div class="card">
+              <h3>目的 / 対象モード / 出力形式</h3>
+              <p>本作の複雑な流れを壊さずに、初心者が次に何をすべきかを理解しやすくする。</p>
+              <p><strong>対象モード</strong></p>
+              <ul>
+                <li><code>easy</code></li>
+                <li><code>historical</code></li>
+              </ul>
+              <p><strong>出力形式</strong></p>
+              <ul>
+                <li>1行アドバイス</li>
+                <li>失敗理由の短文説明</li>
+                <li>現在フェーズで必要な次アクション</li>
+              </ul>
+            </div>
+            <div class="card">
+              <h3>例 / 実装制約</h3>
+              <ul>
+                <li><code>次は潜望鏡で距離測定を実施</code></li>
+                <li><code>ソナー接触のみでは艦種断定不可</code></li>
+                <li><code>同一目標なので再準備は不要</code></li>
+              </ul>
+              <p><strong>実装制約</strong></p>
+              <ul>
+                <li>戦況を先読みしすぎない</li>
+                <li>まだプレイヤーが得ていない内部真値は明かさない</li>
+              </ul>
+            </div>
+          </div>
+        </section>
+
+        <section class="section">
+          <h2>7. 戦闘後レポートAI仕様</h2>
+          <div class="grid two">
+            <div class="card">
+              <h3>目的 / 入力 / 出力</h3>
+              <p>戦闘後の結果を、プレイヤーが理解しやすい戦闘詳報へ要約する。</p>
+              <p><strong>入力</strong></p>
+              <ul>
+                <li>ミッション結果</li>
+                <li>命中数</li>
+                <li>被探知回数</li>
+                <li>主要フェーズ遷移</li>
+                <li>魚雷命中 / 失走理由</li>
+                <li>爆雷被害</li>
+              </ul>
+              <p><strong>出力</strong></p>
+              <ul>
+                <li>艦長日誌</li>
+                <li>戦術レビュー</li>
+                <li>失敗要因分析</li>
+              </ul>
+            </div>
+            <div class="card">
+              <h3>例</h3>
+              <ul>
+                <li><code>接敵は良好だったが、AOB 推定不足により初弾は会敵せず</code></li>
+                <li><code>駆逐艦は爆雷後に接触を一時喪失しており、その間の離脱判断は適切</code></li>
+              </ul>
+            </div>
+          </div>
+        </section>
+
+        <section class="section">
+          <h2>実装優先順位</h2>
+          <div class="grid two">
+            <div class="card">
+              <h3>Phase AI-1 / AI-2</h3>
+              <ul>
+                <li><strong>AI-1</strong>: 艦内復唱 AI、アラーム / 雷撃 / 接触報告のテンプレート制御</li>
+                <li><strong>AI-2</strong>: ソナー員 AI、航海長 AI、雷撃士補助 AI</li>
+              </ul>
+            </div>
+            <div class="card">
+              <h3>Phase AI-3 / AI-4</h3>
+              <ul>
+                <li><strong>AI-3</strong>: 駆逐艦戦術 AI、接触喪失後の捜索判断、爆雷後ジャミング考慮</li>
+                <li><strong>AI-4</strong>: 戦闘後レポート AI、艦長日誌自動生成</li>
+              </ul>
+            </div>
+          </div>
+        </section>
+
+        <section class="section">
+          <h2>状態変数案 / UI実装マッピング</h2>
+          <div class="grid two">
+            <div class="card">
+              <h3>状態変数案</h3>
+              <div class="table-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>変数名</th>
+                      <th>型</th>
+                      <th>用途</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr>
+                      <td><code>aiDestroyerIntent</code></td>
+                      <td>object</td>
+                      <td>駆逐艦の現在判断</td>
+                    </tr>
+                    <tr>
+                      <td><code>crewVoiceQueue</code></td>
+                      <td>array</td>
+                      <td>役職別復唱キュー</td>
+                    </tr>
+                    <tr>
+                      <td><code>advisorHints</code></td>
+                      <td>array</td>
+                      <td>初心者向けアドバイス</td>
+                    </tr>
+                    <tr>
+                      <td><code>afterActionSummary</code></td>
+                      <td>object</td>
+                      <td>戦闘後レポート</td>
+                    </tr>
+                    <tr>
+                      <td><code>contactAssessment</code></td>
+                      <td>object</td>
+                      <td>ソナーAIの報告材料</td>
+                    </tr>
+                    <tr>
+                      <td><code>navigationAdvice</code></td>
+                      <td>object</td>
+                      <td>航海長AIの進言</td>
+                    </tr>
+                    <tr>
+                      <td><code>torpedoAdvice</code></td>
+                      <td>object</td>
+                      <td>雷撃補助</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+            <div class="card">
+              <h3>UI実装マッピング</h3>
+              <div class="table-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>UI領域</th>
+                      <th>AI用途</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr>
+                      <td><code>Bridge Log</code></td>
+                      <td>AI報告ログ</td>
+                    </tr>
+                    <tr>
+                      <td><code>Captain Notes</code></td>
+                      <td>航海長 / ソナー員の要約</td>
+                    </tr>
+                    <tr>
+                      <td><code>Sonar Report To Captain</code></td>
+                      <td>ソナーAI短報</td>
+                    </tr>
+                    <tr>
+                      <td><code>Best Shot</code></td>
+                      <td>雷撃補助説明</td>
+                    </tr>
+                    <tr>
+                      <td><code>Captain Intent</code></td>
+                      <td>初心者向け次アクション提示</td>
+                    </tr>
+                    <tr>
+                      <td><code>Mission End Screen</code></td>
+                      <td>戦闘後レポート</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section class="section">
+          <h2>実装上の注意 / 結論</h2>
+          <div class="grid two">
+            <div class="card">
+              <h3>実装上の注意</h3>
+              <ul>
+                <li>AIが出してよい情報は <code>プレイヤーが現在知っている情報</code> に限定する</li>
+                <li>史実感を優先し、現代的すぎる口調や説明を避ける</li>
+                <li>ドイツ語音声は <code>録音優先</code>、AI はテキスト補助と TTS 補完を担当する</li>
+                <li>AI応答が失敗してもゲームが止まらないよう、固定テンプレートへフォールバックする</li>
+              </ul>
+            </div>
+            <div class="card">
+              <h3>結論</h3>
+              <p>
+                <code>SilentDepth</code> における AI は、<code>戦闘の答えを代わりに出す存在</code> ではなく、
+                <code>不完全な情報の中での判断と報告を厚くする存在</code> として使うのが最適である。
+              </p>
+              <p>最初に実装すべきは次の3つ。</p>
+              <ol>
+                <li><code>艦内復唱AI</code></li>
+                <li><code>ソナー / 航海長の助言AI</code></li>
+                <li><code>駆逐艦の戦術AI</code></li>
+              </ol>
+              <p class="section-note">この順で進めることで、ゲームの計算核を壊さずに体験密度を上げられる。</p>
+            </div>
+          </div>
+        </section>
+      </div>
+    </main>
+  </body>
+</html>
