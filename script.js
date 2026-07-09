@@ -861,6 +861,9 @@ const state = {
     intensity: 0,
     source: null
   },
+  advisorHints: [],
+  contactAssessment: null,
+  navigationAdvice: null,
   voiceRuntime: {
     lastDepthReachedTarget: null,
     lastPeriscopeMode: "normal",
@@ -3280,6 +3283,73 @@ function sonarStageGaugeMarkup(stage) {
     .join("")}</div>`;
 }
 
+function sonarRelativeBearingLabel(relBearing) {
+  const normalized = normalizeAngle(relBearing);
+  if (normalized <= 20 || normalized >= 340) return "前方";
+  if (normalized < 90) return "右舷前方";
+  if (normalized <= 160) return "右舷";
+  if (normalized < 200) return "後方";
+  if (normalized <= 270) return "左舷";
+  return "左舷前方";
+}
+
+function buildSonarAdvisorReport() {
+  const lead = state.sonarContacts[0];
+  if (!lead) {
+    return {
+      brief: "受動聴音継続",
+      detail: "報告: 有意な接触なし。広域聴音を継続し、方位変化を待つ。",
+      captainNote: "ソナー員報告: 接触なし。静粛を維持しつつ広域聴音を継続。",
+      intent: "受動聴音を継続し、最初の接触方位を待つ。",
+      hint: "ソナー接触待ち。現段階では進路を大きく変えず監視。"
+    };
+  }
+
+  const contact = lead.contact;
+  const observed = state.observedContacts.get(contact.id);
+  const intel = sonarIntelSummary(contact);
+  const bearingLabel = sonarRelativeBearingLabel(lead.relBearing);
+  const typeName = observed?.suspectedType ? contactLabel({ type: observed.suspectedType }) : null;
+  const typeConfidence = observed?.identifyConfidence != null
+    ? getSonarTypeConfidenceLabel(observed.identifyConfidence)
+    : null;
+
+  let brief = `${bearingLabel} ${intel.brief}`;
+  let detail = `報告: ${bearingLabel}に ${playerSonarLabel(contact)}。${intel.detail} / 強度 ${Math.round(
+    lead.strength * 100
+  )}%。`;
+  let captainNote = `ソナー員報告: ${bearingLabel}に接触。${intel.detail}。`;
+  let intent = "方位変化を追い、距離帯の確定を優先。";
+  let hint = "まず接触維持。方位変化と強度推移を追って観測段階を上げる。";
+
+  if (typeName) {
+    detail += ` 艦種推定 ${typeName} / 信頼 ${typeConfidence}。`;
+    captainNote += ` 艦種は ${typeName} 推定。`;
+  }
+
+  if ((observed?.intelStage || 1) >= 2) {
+    intent = "距離幅は見え始めた。接触維持で速力推定へ進む。";
+    hint = "まだ断定しない。距離帯を維持したまま追尾。";
+  }
+  if ((observed?.intelStage || 1) >= 3) {
+    brief = `${bearingLabel} 速力推定`;
+    intent = "速力推定が出た。前方回り込みの基準として艦長へ上申。";
+    hint = "速力推定を使って航海長の回り込みコースを確認。";
+  }
+  if ((observed?.intelStage || 1) >= 4) {
+    brief = `${bearingLabel} 針路推定`;
+    intent = "針路推定が成立。射点形成に必要な接敵情報が揃いつつある。";
+    hint = "針路推定を維持しつつ潜望鏡観測へ移る位置を作る。";
+  }
+  if (contact.hostile && lead.strength > 0.72) {
+    captainNote += " 護衛急接近の恐れ。";
+    intent = "護衛接近の恐れあり。静粛または回避優先。";
+    hint = "護衛接近。深度変更か静粛航行で被探知を抑える。";
+  }
+
+  return { brief, detail, captainNote, intent, hint };
+}
+
 function navigationInterceptAdvice() {
   const focusContact = state.contactTactical.focusContactId
     ? state.contacts.find((contact) => contact.id === state.contactTactical.focusContactId && !contact.destroyed) || null
@@ -3353,6 +3423,72 @@ function navigationInterceptAdvice() {
     note: `航海長具申: 針路 ${formatHeading(recommendedHeading)}、速力 ${recommendedSpeed.toFixed(1)}kt で進出。敵推定 針路 ${formatHeading(
       estimatedTargetHeading
     )} / 速力 ${estimatedTargetSpeed.toFixed(1)}kt。目標進出点 ${Math.round(waypointRadius)}m 先。`
+  };
+}
+
+function buildNavigationAdvisor() {
+  const advice = navigationInterceptAdvice();
+  const tactical = state.contactTactical;
+  const sub = state.submarine;
+  const recommendedDepth =
+    state.commandIntent === "periscope"
+      ? 15
+      : state.commandIntent === "evade" || tactical.precision < 0.35
+        ? 140
+        : 60;
+
+  if (advice.heading === null) {
+    return {
+      brief: "進路提案待機",
+      detail: "報告: 有効な接触がなく、進路提案不可。現針路を維持。",
+      captainNote: "航海長具申: まだ接敵情報不足。現針路維持。",
+      intent: "接敵情報が固まるまで針路を保持。",
+      hint: "先にソナー接触を育てる。航海長の回り込み提案はその後。",
+      heading: null,
+      speed: null,
+      depth: recommendedDepth,
+      waypoint: null,
+      status: "待機"
+    };
+  }
+
+  let status = "接敵整理";
+  let intent = "前方へ回り込み、射点形成を優先。";
+  let hint = "航海長提案の針路に合わせ、接近効率を上げる。";
+
+  if (state.commandIntent === "evade" || state.battlePhase === BATTLE_PHASES.egress) {
+    status = "離脱優先";
+    intent = "護衛との離隔を広げ、離脱針路を優先。";
+    hint = "速力を抑えつつ深度を取り、離脱海域へ向けて針路維持。";
+  } else if (state.commandIntent === "periscope" || tactical.firingLane >= 0.66) {
+    status = "射点形成中";
+    intent = "観測位置を保ち、潜望鏡安定を優先。";
+    hint = "射点形成中。潜望鏡深度と低速維持で解を固める。";
+  } else if (tactical.positioning < 0.45) {
+    status = "回り込み不足";
+    intent = "まだ前方位置が浅い。さらに回り込みを継続。";
+    hint = "敵進路前方へもう一段回り込む。";
+  } else if (tactical.precision >= 0.58 && tactical.positioning >= 0.58) {
+    status = "先手維持";
+    intent = "有利位置を維持し、観測へ移る余地あり。";
+    hint = "いまは先手維持。無理に速度を上げず位置を保つ。";
+  }
+
+  return {
+    brief: `${status} ${formatHeading(advice.heading)}`,
+    detail: `報告: ${status}。推奨 針路 ${formatHeading(advice.heading)} / 速力 ${advice.speed.toFixed(
+      1
+    )}kt / 深度 ${recommendedDepth}m。${advice.note}`,
+    captainNote: `航海長具申: ${status}。針路 ${formatHeading(advice.heading)}、速力 ${advice.speed.toFixed(
+      1
+    )}kt、深度 ${recommendedDepth}m。`,
+    intent,
+    hint,
+    heading: advice.heading,
+    speed: advice.speed,
+    depth: recommendedDepth,
+    waypoint: advice.waypoint,
+    status
   };
 }
 
@@ -4251,6 +4387,11 @@ function updateHud() {
   const binocularFocus = state.viewMode === "binocular"
     ? getPeriscopeVisuals().find((entry) => entry.id === state.periscopeControl.focusContactId) ?? null
     : null;
+  const sonarAdvisor = buildSonarAdvisorReport();
+  const navigationAdvisor = buildNavigationAdvisor();
+  state.contactAssessment = sonarAdvisor;
+  state.navigationAdvice = navigationAdvisor;
+  state.advisorHints = [sonarAdvisor.hint, navigationAdvisor.hint].filter(Boolean);
   updateTDCEstimates();
   const tubeStatusText = state.torpedoSequence.tubeReady
     ? `${activeTube ? `管 ${activeTube.label}` : "使用管"} / ${
@@ -4379,9 +4520,9 @@ function updateHud() {
   captainOrderNode.textContent = state.command.captainOrder;
   commandPriorityNode.textContent = state.command.priorityLabel;
   commandPriorityNode.dataset.priority = state.command.priorityTone;
-  sonarReportBriefNode.textContent = state.command.sonar;
+  sonarReportBriefNode.textContent = sonarAdvisor.brief;
   torpedoReportBriefNode.textContent = state.command.torpedo;
-  navigationReportBriefNode.textContent = state.command.navigation;
+  navigationReportBriefNode.textContent = navigationAdvisor.brief;
 
   captainSummaryNode.textContent = state.stageState.cleared
     ? `${stage.name} クリア。${state.stageState.message}`
@@ -4426,7 +4567,7 @@ function updateHud() {
                   1
                 )} 秒。`
             : ""
-      }`
+      } ${sonarAdvisor.captainNote} ${navigationAdvisor.captainNote}`
     : "重要輸送船は沈黙。駆逐艦との距離を保って離脱海域へ向かう。";
   captainIntentNode.textContent = state.stageState.cleared
     ? state.stageState.message
@@ -4439,7 +4580,7 @@ function updateHud() {
       ? "危険な浮上発射を実施。即潜航し、護衛の探知円から離脱する。"
       : state.viewMode === "binocular"
       ? state.binocularAttackReason
-      : tactical.note
+      : `${navigationAdvisor.intent} ${sonarAdvisor.intent}`
     : "敵護衛との間隔を広げつつ離脱海域へ退避する。";
   captainDutyNode.textContent = phase.name;
   captainOpsNode.textContent =
@@ -4564,21 +4705,7 @@ function updateHud() {
         : "なし";
   }
 
-  sonarReportDetailNode.textContent = state.sonarContacts.length
-    ? (() => {
-        const lead = state.sonarContacts[0];
-        const observed = state.observedContacts.get(lead.contact.id);
-        const intel = sonarIntelSummary(lead.contact);
-        const typeNote = observed?.suspectedType
-          ? ` 艦種推定 ${contactLabel({ type: observed.suspectedType })} / 信頼 ${getSonarTypeConfidenceLabel(
-              observed.identifyConfidence || 0
-            )}。`
-          : "";
-        return `報告: 最有力接触は ${playerSonarLabel(lead.contact)}。${intel.detail} / 強度 ${Math.round(
-          lead.strength * 100
-        )}% / 接触精度 ${Math.round(tactical.precision * 100)}%。${typeNote}`;
-      })()
-    : "報告: 有意な接触なし。受動聴音を継続。";
+  sonarReportDetailNode.textContent = sonarAdvisor.detail;
   sonarDutyNode.textContent =
     state.battlePhase === BATTLE_PHASES.alarmDive
       ? "護衛接近の緊急警報"
@@ -4595,8 +4722,8 @@ function updateHud() {
     state.battlePhase === BATTLE_PHASES.alarmDive
       ? "急速潜航。護衛接近方位を連続報告。"
       : state.battlePhase === BATTLE_PHASES.submergedCombat
-      ? `${loopMeta.label}。${loopMeta.sonar} / ${state.sonarContacts[0] ? sonarIntelSummary(state.sonarContacts[0].contact).brief : "方位再探索"}`
-      : sonarReportDetailNode.textContent;
+      ? `${loopMeta.label}。${loopMeta.sonar} / ${sonarAdvisor.brief}`
+      : sonarAdvisor.detail;
 
   torpedoReportDetailNode.textContent = state.torpedoSequence.selectedTargetId
     ? `報告: ${selectedFire.label}。${selectedFire.detail}`
@@ -4663,11 +4790,11 @@ function updateHud() {
         nav.periscopeStable ? "良" : "不十分"
       }。`
     : flagshipAlive
-    ? `報告: 針路誤差 ${Math.round(nav.headingError)}° / 深度誤差 ${Math.round(
+    ? `${navigationAdvisor.detail} 針路誤差 ${Math.round(nav.headingError)}° / 深度誤差 ${Math.round(
         nav.depthError
       )}m / 回り込み ${Math.round(tactical.positioning * 100)}% / 射点形成 ${Math.round(
         tactical.firingLane * 100
-      )}%。 ${navigationInterceptAdvice().note}`
+      )}%。`
     : `報告: 離脱針路を維持。海域端まで ${Math.round(distance(sub, state.escapeZone))}m。`;
   navigationDutyNode.textContent =
     state.battlePhase === BATTLE_PHASES.alarmDive
@@ -4685,7 +4812,7 @@ function updateHud() {
     state.battlePhase === BATTLE_PHASES.alarmDive
       ? `急速潜航。深度 ${Math.round(sub.depth)}m、潜降率を維持。`
       : state.battlePhase === BATTLE_PHASES.submergedCombat
-      ? `${loopMeta.label}。${navigationInterceptAdvice().note}`
+      ? `${loopMeta.label}。${navigationAdvisor.detail}`
       : navigationReportDetailNode.textContent;
   navApproachRatingNode.textContent = `${Math.round(nav.approachRating * 100)}%`;
   navHeadingErrorNode.textContent = `${Math.round(nav.headingError)}°`;
