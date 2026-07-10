@@ -7415,8 +7415,8 @@ function drawOverlay() {
     const metricCards = [
       { label: "深度", value: `${Math.round(sub.depth)}m` },
       { label: "速力", value: `${sub.speed.toFixed(1)}kt` },
-      { label: "被探知", value: `${Math.round(sub.detection * 100)}%` },
-      { label: "騒音", value: sub.noise < 0.22 ? "低" : sub.noise < 0.52 ? "中" : "高" }
+      { label: "機関", value: isSurfaced(sub) ? "ディーゼル" : "電動機" },
+      { label: "被探知", value: `${Math.round(sub.detection * 100)}%` }
     ];
     const escortContacts = state.contacts.filter(
       (contact) => contact.hostile && !contact.destroyed
