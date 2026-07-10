@@ -802,6 +802,29 @@ canvas {
   cursor: pointer;
 }
 
+.header-link-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 3px 10px;
+  font-size: 11px;
+  color: #a5c1cd;
+  text-decoration: none;
+  white-space: nowrap;
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid rgba(141, 219, 237, 0.35);
+  border-radius: 999px;
+  transition: color 160ms ease, border-color 160ms ease, background 160ms ease;
+}
+
+.header-link-button:hover,
+.header-link-button:focus-visible {
+  color: #08131b;
+  background: linear-gradient(135deg, #ffe08b, #bfefff);
+  border-color: transparent;
+  outline: none;
+}
+
 .time-scale-button.active {
   color: #08131b;
   background: linear-gradient(135deg, #ffe08b, #bfefff);
