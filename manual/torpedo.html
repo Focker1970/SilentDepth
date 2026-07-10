@@ -30,11 +30,48 @@
           <h2>基本手順</h2>
           <ol class="step-list">
             <li><strong>1. 標的選定</strong> 今いちばん撃つ価値の高い目標を選ぶ。</li>
-            <li><strong>2. 諸元入力</strong> TDC の方位、距離、速力、AOB を整える。</li>
-            <li><strong>3. 発射準備</strong> 発射管処理を待ち、管を発射可能にする。</li>
-            <li><strong>4. 発射</strong> 深度、進角、射程が良ければ撃つ。</li>
-            <li><strong>5. 命中判定</strong> 会敵時間と後処理を見ながら結果を待つ。</li>
+            <li><strong>2. 魚雷種別を決める</strong> Historical では <code>G7a Fast / G7a Medium / G7e Electric</code> を選ぶ。</li>
+            <li><strong>3. 諸元入力</strong> TDC の方位、距離、速力、AOB を整える。</li>
+            <li><strong>4. 発射準備</strong> 発射管処理を待ち、管を発射可能にする。</li>
+            <li><strong>5. 発射</strong> 深度、進角、射程が良ければ撃つ。</li>
+            <li><strong>6. 命中判定</strong> 会敵時間と後処理を見ながら結果を待つ。</li>
           </ol>
+        </section>
+
+        <section class="section">
+          <h2>魚雷種別の使い分け</h2>
+          <div class="table-wrap">
+            <table>
+              <tr><th>魚雷</th><th>速力</th><th>向く場面</th><th>注意</th></tr>
+              <tr><td>G7a Fast</td><td>44kt</td><td>近中距離で会敵を早めたいとき</td><td>実用射程は短め、護衛に気付かれやすい</td></tr>
+              <tr><td>G7a Medium</td><td>40kt</td><td>標準的な Historical 雷撃</td><td>まず迷ったらこれ</td></tr>
+              <tr><td>G7e Electric</td><td>30kt</td><td>夜戦、護衛近傍、隠密重視</td><td>低速なので遠距離では外れやすい</td></tr>
+            </table>
+          </div>
+          <p class="note">発射準備後に魚雷種別を変えると、発射準備はやり直しになります。</p>
+        </section>
+
+        <section class="section">
+          <h2>双眼鏡からの雷撃</h2>
+          <div class="grid two">
+            <article class="card">
+              <h3>手順</h3>
+              <ul>
+                <li><code>0m</code> で完全浮上する</li>
+                <li><code>浮上双眼鏡</code> で目標を視野に入れる</li>
+                <li><code>Tab</code> で撃ちたい船を焦点目標にする</li>
+                <li>雷撃席で <code>方位同期</code> と <code>距離同期</code> を行う</li>
+                <li>Speed / AOB 推定を採用して発射へ進む</li>
+              </ul>
+            </article>
+            <article class="card">
+              <h3>距離同期の意味</h3>
+              <p>
+                双眼鏡中の <code>距離同期</code> は、ボタン名が <code>潜望鏡同期</code> のままでも
+                <code>今見ている焦点目標の概算距離</code> を TDC に入れます。
+              </p>
+            </article>
+          </div>
         </section>
 
         <section class="section">
@@ -46,7 +83,11 @@
             </article>
             <article class="card">
               <h3>距離測定がない</h3>
-              <p>Historical では、潜望鏡測距なしだと解が不安定です。</p>
+              <p>Historical では、潜望鏡測距なしだと解が不安定です。双眼鏡なら焦点目標の距離同期が必要です。</p>
+            </article>
+            <article class="card">
+              <h3>魚雷種別が場面に合っていない</h3>
+              <p>遠距離で低速魚雷、近距離で長射程重視など、選択ミスで会敵条件が悪化します。</p>
             </article>
             <article class="card">
               <h3>射点が悪い</h3>
@@ -55,6 +96,10 @@
             <article class="card">
               <h3>準備前に撃とうとしている</h3>
               <p><code>発射準備</code> 完了前は見た目に解があっても撃てません。</p>
+            </article>
+            <article class="card">
+              <h3>実用射程を超えている</h3>
+              <p>TDC が通っていても、実用射程を超えると命中率は大きく落ちます。</p>
             </article>
           </div>
         </section>
