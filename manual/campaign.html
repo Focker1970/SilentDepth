@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>SilentDepth ステージ / Campaign マニュアル</title>
+    <link rel="stylesheet" href="manual.css" />
+  </head>
+  <body>
+    <main>
+      <section class="hero">
+        <p class="eyebrow">Manual / Campaign</p>
+        <h1>ステージ / Campaign マニュアル</h1>
+        <p>ステージの意味、Campaign Status の見方、継続哨戒 / 帰投補給、保存 / 再開の使い方をまとめます。</p>
+      </section>
+      <div class="stack">
+        <section class="nav-box">
+          <div class="topnav">
+            <a href="index.html">マニュアル索引</a>
+            <a href="overview.html">全体の遊び方</a>
+            <a href="captain.html">艦長</a>
+            <a href="sonar.html">ソナー</a>
+            <a href="torpedo.html">雷撃</a>
+            <a href="navigation.html">航海長</a>
+            <a class="current" href="campaign.html">ステージ / Campaign</a>
+          </div>
+        </section>
+
+        <section class="section">
+          <h2>ステージ一覧</h2>
+          <div class="table-wrap">
+            <table>
+              <tr><th>Stage</th><th>内容</th><th>学ぶこと</th></tr>
+              <tr><td>I / 雷撃訓練</td><td>単独商船への基本雷撃</td><td>潜望鏡、TDC、発射までの基本</td></tr>
+              <tr><td>II / 駆逐艦回避</td><td>護衛からの離脱</td><td>静粛、深度、離脱針路</td></tr>
+              <tr><td>III / 船団襲撃</td><td>実戦コンボイ戦</td><td>群狼作戦、優先目標、複数接触処理</td></tr>
+            </table>
+          </div>
+        </section>
+
+        <section class="section">
+          <h2>Campaign Status の見方</h2>
+          <ul>
+            <li><code>累積戦果</code> 撃沈した総トン数と隻数</li>
+            <li><code>船体持越 / 電池持越 / 予備魚雷</code> 次任務へ持ち越す残量</li>
+            <li><code>補給回数</code> 帰投補給した回数</li>
+            <li><code>群狼電文</code> 群狼作戦イベントの現在報告</li>
+            <li><code>状態</code> いまのキャンペーン状態の要約</li>
+          </ul>
+        </section>
+
+        <section class="section">
+          <h2>任務終了後の選択</h2>
+          <div class="grid two">
+            <article class="card">
+              <h3>継続哨戒</h3>
+              <p>補給なしで次ステージへ進みます。損傷、電池、予備魚雷をそのまま持ち越します。</p>
+            </article>
+            <article class="card">
+              <h3>帰投して次任務</h3>
+              <p>船体100%、電池100%、全発射管再装填、予備魚雷9本に戻して次ステージへ進みます。</p>
+            </article>
+          </div>
+        </section>
+
+        <section class="section">
+          <h2>保存 / 再開 / 新規</h2>
+          <ol class="step-list">
+            <li><strong>保存</strong> 現在の Campaign Status をブラウザに保存します。</li>
+            <li><strong>再開</strong> 保存済みの Campaign Status を読み込みます。再開位置は現在ステージの冒頭です。</li>
+            <li><strong>新規</strong> 保存済みの Campaign Status を破棄して Stage I からやり直します。</li>
+          </ol>
+          <p class="note">保存は <code>localStorage</code> を使うため、同じブラウザ・同じ端末ごとに保持されます。</p>
+        </section>
+      </div>
+    </main>
+  </body>
+</html>

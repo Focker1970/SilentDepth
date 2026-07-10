@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>SilentDepth 艦長マニュアル</title>
+    <link rel="stylesheet" href="manual.css" />
+  </head>
+  <body>
+    <main>
+      <section class="hero">
+        <p class="eyebrow">Manual / Captain</p>
+        <h1>艦長マニュアル</h1>
+        <p>艦長席は、どの役職を今優先するかを決める席です。まずは「命令の意味」を覚えることが重要です。</p>
+      </section>
+      <div class="stack">
+        <section class="nav-box">
+          <div class="topnav">
+            <a href="index.html">マニュアル索引</a>
+            <a href="overview.html">全体の遊び方</a>
+            <a class="current" href="captain.html">艦長</a>
+            <a href="sonar.html">ソナー</a>
+            <a href="torpedo.html">雷撃</a>
+            <a href="navigation.html">航海長</a>
+            <a href="campaign.html">ステージ / Campaign</a>
+          </div>
+        </section>
+
+        <section class="section">
+          <h2>まず使う4つの命令</h2>
+          <div class="grid two">
+            <article class="card"><h3>接敵維持</h3><p>ソナー接触を切らさず、敵前方へ静かに回り込む方針です。</p></article>
+            <article class="card"><h3>被探知回避</h3><p>戦うより生残を優先。深度を取り、静粛寄りの行動へ切り替えます。</p></article>
+            <article class="card"><h3>潜望鏡深度へ</h3><p><code>15m</code> 付近へ移行し、潜望鏡観測と潜航雷撃の準備をします。</p></article>
+            <article class="card"><h3>Alarm! 急速潜航</h3><p>最優先の緊急命令です。浮上中に危険を感じたら即使用します。</p></article>
+          </div>
+        </section>
+
+        <section class="section">
+          <h2>潜望鏡と双眼鏡</h2>
+          <div class="table-wrap">
+            <table>
+              <tr><th>操作</th><th>使える深度</th><th>用途</th><th>注意</th></tr>
+              <tr><td>潜望鏡</td><td>潜望鏡深度</td><td>目標観測、測距、方位確認</td><td>深い潜航中はグレーアウト</td></tr>
+              <tr><td>双眼鏡</td><td>完全浮上</td><td>水上観測、夜間接近、浮上攻撃</td><td>護衛が近いと危険</td></tr>
+            </table>
+          </div>
+          <p class="note">双眼鏡ボタンが <code>観測のみ</code> のときは、観測はできても攻撃条件が整っていない状態です。</p>
+        </section>
+
+        <section class="section">
+          <h2>艦長席 HUD の見方</h2>
+          <ul>
+            <li><code>深度</code> と <code>機関</code> を見ると、いま完全浮上か潜航中か分かる</li>
+            <li><code>被探知</code> が高いときは浮上観測や高速度を控える</li>
+            <li><code>Battle Phase</code> と <code>Immediate Objective</code> を見れば、今やるべきことが分かる</li>
+            <li><code>Captain Notes</code> に接触精度や戦術優位が要約される</li>
+          </ul>
+        </section>
+      </div>
+    </main>
+  </body>
+</html>

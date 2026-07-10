@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>SilentDepth 航海長マニュアル</title>
+    <link rel="stylesheet" href="manual.css" />
+  </head>
+  <body>
+    <main>
+      <section class="hero">
+        <p class="eyebrow">Manual / Navigation</p>
+        <h1>航海長マニュアル</h1>
+        <p>航海長席は「どの深度で、どの針路で、どの速力なら有利か」を作る席です。射点形成と生残の両方を支えます。</p>
+      </section>
+      <div class="stack">
+        <section class="nav-box">
+          <div class="topnav">
+            <a href="index.html">マニュアル索引</a>
+            <a href="overview.html">全体の遊び方</a>
+            <a href="captain.html">艦長</a>
+            <a href="sonar.html">ソナー</a>
+            <a href="torpedo.html">雷撃</a>
+            <a class="current" href="navigation.html">航海長</a>
+            <a href="campaign.html">ステージ / Campaign</a>
+          </div>
+        </section>
+
+        <section class="section">
+          <h2>深度帯の意味</h2>
+          <div class="table-wrap">
+            <table>
+              <tr><th>深度</th><th>状態</th><th>できること</th><th>注意</th></tr>
+              <tr><td>0m</td><td>完全浮上</td><td>双眼鏡、ディーゼル推進、充電</td><td>最も見つかりやすい</td></tr>
+              <tr><td>5m</td><td>半没</td><td>浅い待機、即潜航しやすい</td><td>充電も双眼鏡も不可</td></tr>
+              <tr><td>15m</td><td>潜望鏡深度</td><td>潜望鏡観測、潜航雷撃</td><td>まだ被発見リスクあり</td></tr>
+              <tr><td>60m</td><td>通常潜航</td><td>接敵維持、聴音追尾</td><td>視認不可</td></tr>
+              <tr><td>140m</td><td>深深度回避</td><td>護衛回避、離脱</td><td>観測も雷撃も不向き</td></tr>
+              <tr><td>230m</td><td>実用限界近く</td><td>緊急回避</td><td>圧力リスクが高い</td></tr>
+            </table>
+          </div>
+        </section>
+
+        <section class="section">
+          <h2>基本操作</h2>
+          <ul>
+            <li><code>停止 / 微速 / 巡航 / 全速</code> で速力変更</li>
+            <li><code>浮上 / 半没 / 15m / 60m / 140m / 230m</code> で深度変更</li>
+            <li><code>左へ / 保持 / 右へ</code> で針路調整</li>
+            <li>Navigation Plot で自艦提案進路、敵予測進路、射点を確認</li>
+          </ul>
+        </section>
+
+        <section class="section">
+          <h2>覚え方</h2>
+          <ol class="step-list">
+            <li><strong>接敵中</strong> まずは <code>60m / 微速</code> でソナー接触を維持。</li>
+            <li><strong>観測前</strong> 射点が近づいたら <code>15m</code> へ上げる。</li>
+            <li><strong>浮上観測</strong> 安全時だけ <code>0m</code> へ上げて双眼鏡を使う。</li>
+            <li><strong>回避</strong> 危険なら <code>140m</code> かそれ以上で離脱。</li>
+          </ol>
+        </section>
+      </div>
+    </main>
+  </body>
+</html>
