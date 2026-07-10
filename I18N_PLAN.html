@@ -1,0 +1,411 @@
+<!DOCTYPE html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>SilentDepth 多言語化実装計画</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        --bg-top: #05131d;
+        --bg-bottom: #102b3c;
+        --panel: rgba(7, 21, 31, 0.84);
+        --panel-border: rgba(139, 220, 241, 0.16);
+        --text: #edf8fb;
+        --muted: #a8c0cb;
+        --accent: #dffbff;
+        --accent-soft: #8bdcf1;
+        --warning: #ffd47b;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        min-height: 100vh;
+        font-family: "Avenir Next", "Hiragino Sans", sans-serif;
+        color: var(--text);
+        background:
+          radial-gradient(circle at top, rgba(139, 220, 241, 0.14), transparent 26%),
+          linear-gradient(180deg, var(--bg-bottom), var(--bg-top));
+      }
+
+      body::before {
+        content: "";
+        position: fixed;
+        inset: 0;
+        background-image:
+          linear-gradient(rgba(255, 255, 255, 0.03) 1px, transparent 1px),
+          linear-gradient(90deg, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
+        background-size: 42px 42px;
+        opacity: 0.16;
+        pointer-events: none;
+      }
+
+      main {
+        position: relative;
+        z-index: 1;
+        max-width: 1320px;
+        margin: 0 auto;
+        padding: 24px;
+      }
+
+      .hero,
+      .section {
+        border: 1px solid var(--panel-border);
+        border-radius: 28px;
+        background: var(--panel);
+        backdrop-filter: blur(12px);
+        box-shadow: 0 24px 70px rgba(0, 0, 0, 0.28);
+      }
+
+      .hero {
+        padding: 30px;
+      }
+
+      .section {
+        padding: 24px;
+      }
+
+      .stack {
+        display: grid;
+        gap: 20px;
+        margin-top: 20px;
+      }
+
+      .eyebrow {
+        margin: 0 0 10px;
+        color: var(--accent-soft);
+        text-transform: uppercase;
+        letter-spacing: 0.18em;
+      }
+
+      h1,
+      h2,
+      h3,
+      p {
+        margin-top: 0;
+      }
+
+      h1 {
+        margin-bottom: 12px;
+        font-size: clamp(2.6rem, 8vw, 4.6rem);
+        line-height: 0.96;
+      }
+
+      h2 {
+        margin-bottom: 14px;
+        font-size: 1.6rem;
+      }
+
+      h3 {
+        margin-bottom: 10px;
+        font-size: 1.12rem;
+        color: var(--accent);
+      }
+
+      p,
+      li {
+        line-height: 1.8;
+        color: var(--muted);
+      }
+
+      ul,
+      ol {
+        margin: 0;
+        padding-left: 22px;
+      }
+
+      li + li {
+        margin-top: 6px;
+      }
+
+      code {
+        padding: 2px 6px;
+        border-radius: 8px;
+        background: rgba(255, 255, 255, 0.08);
+        color: var(--text);
+        font-family: "SFMono-Regular", Consolas, monospace;
+      }
+
+      .pill {
+        display: inline-block;
+        margin-top: 10px;
+        padding: 8px 12px;
+        border-radius: 999px;
+        background: rgba(139, 220, 241, 0.12);
+        color: var(--accent);
+      }
+
+      .grid {
+        display: grid;
+        gap: 16px;
+      }
+
+      .grid.two {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+
+      .grid.three {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+      }
+
+      .card {
+        padding: 18px;
+        border-radius: 20px;
+        background: rgba(255, 255, 255, 0.04);
+        border: 1px solid rgba(255, 255, 255, 0.05);
+      }
+
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-top: 12px;
+        overflow: hidden;
+        border-radius: 18px;
+        background: rgba(255, 255, 255, 0.03);
+      }
+
+      th,
+      td {
+        padding: 12px 14px;
+        text-align: left;
+        vertical-align: top;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+      }
+
+      th {
+        color: var(--accent);
+        background: rgba(139, 220, 241, 0.08);
+        font-weight: 700;
+      }
+
+      tr:last-child td {
+        border-bottom: 0;
+      }
+
+      .table-wrap {
+        overflow-x: auto;
+      }
+
+      .section-note {
+        margin-top: 12px;
+        color: var(--warning);
+      }
+
+      @media (max-width: 980px) {
+        .grid.two,
+        .grid.three {
+          grid-template-columns: 1fr;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <section class="hero">
+        <p class="eyebrow">SilentDepth Internationalization Plan</p>
+        <h1>SilentDepth 多言語化実装計画</h1>
+        <p>
+          <code>SilentDepth</code> を海外プレイヤーにも公開できるようにするための実装計画。
+          まずは <code>日本語 / English</code> の2言語対応を対象にし、UI・HUD・ログ・マニュアルを段階的に切り替えられる状態を作る。
+        </p>
+        <div class="pill">最初の目標は 遊べる入口 を英語化すること</div>
+      </section>
+
+      <div class="stack">
+        <section class="section">
+          <h2>基本方針</h2>
+          <ul>
+            <li>日本語UIを削るのではなく、<code>JP / EN</code> 切替式にする</li>
+            <li>物理計算や戦闘ロジックは変えず、文言分離を先に進める</li>
+            <li>ドイツ語復唱は演出として維持し、意味説明だけ日本語 / 英語で切り替える</li>
+            <li><code>index.html</code> と <code>manual/</code> を最優先で多言語化する</li>
+          </ul>
+        </section>
+
+        <section class="section">
+          <h2>到達目標</h2>
+          <div class="grid three">
+            <article class="card">
+              <h3>Phase A</h3>
+              <p>ヘッダー、役職名、主要ボタン、HUD見出しが <code>JP / EN</code> で切り替わる。</p>
+            </article>
+            <article class="card">
+              <h3>Phase B</h3>
+              <p>Duty Board、主要報告文、Campaign Status を含むゲーム主要導線が英語でも成立する。</p>
+            </article>
+            <article class="card">
+              <h3>Phase C</h3>
+              <p><code>manual/</code> 一式と Bridge Log まで含めて、多言語版公開が成立する。</p>
+            </article>
+          </div>
+        </section>
+
+        <section class="section">
+          <h2>多言語化方針</h2>
+          <div class="grid two">
+            <article class="card">
+              <h3>文言の分離</h3>
+              <p><code>index.html</code> と <code>script.js</code> に直書きされている文言を、言語辞書から描画する構造へ移す。</p>
+            </article>
+            <article class="card">
+              <h3>切替UI</h3>
+              <p>ヘッダー <code>Control</code> に <code>JP / EN</code> を置き、設定は <code>localStorage</code> に保持する。</p>
+            </article>
+            <article class="card">
+              <h3>英語表現</h3>
+              <p>直訳ではなく、海外プレイヤーに通じる海戦ゲーム用語へ寄せる。</p>
+            </article>
+            <article class="card">
+              <h3>ドイツ語復唱</h3>
+              <p>音声はドイツ語のままでよい。意味説明のグロスだけ日本語 / 英語切替にする。</p>
+            </article>
+          </div>
+        </section>
+
+        <section class="section">
+          <h2>置換対象一覧</h2>
+          <div class="grid two">
+            <article class="card">
+              <h3>最優先</h3>
+              <ul>
+                <li>ヘッダー文言</li>
+                <li>役職タブ名</li>
+                <li>主要コマンドボタン</li>
+                <li>Tactical Strip</li>
+                <li>Campaign Status 見出し</li>
+                <li>プレイマニュアル導線</li>
+              </ul>
+            </article>
+            <article class="card">
+              <h3>優先</h3>
+              <ul>
+                <li>Duty Board</li>
+                <li>Captain Notes / Intent</li>
+                <li>Report To Captain</li>
+                <li>Firing Sequence</li>
+                <li>Navigation / Solution Metrics</li>
+                <li>Alarm Dive / Mission Decision</li>
+              </ul>
+            </article>
+            <article class="card">
+              <h3>後追い</h3>
+              <ul>
+                <li>Bridge Log</li>
+                <li>動的報告文</li>
+                <li>エラー文</li>
+                <li>チュートリアル補助文</li>
+                <li>音声説明文</li>
+              </ul>
+            </article>
+            <article class="card">
+              <h3>マニュアル</h3>
+              <ul>
+                <li><code>manual/index.html</code></li>
+                <li><code>manual/overview.html</code></li>
+                <li><code>manual/captain.html</code></li>
+                <li><code>manual/sonar.html</code></li>
+                <li><code>manual/torpedo.html</code></li>
+                <li><code>manual/navigation.html</code></li>
+                <li><code>manual/campaign.html</code></li>
+              </ul>
+            </article>
+          </div>
+        </section>
+
+        <section class="section">
+          <h2>実装方式案</h2>
+          <div class="grid two">
+            <article class="card">
+              <h3>案1: <code>script.js</code> 内包</h3>
+              <p>初速は速いが、文言が増えるほど管理しづらい。</p>
+            </article>
+            <article class="card">
+              <h3>案2: <code>i18n.js</code> 分離</h3>
+              <p>管理しやすく、将来の言語追加にも強い。こちらを推奨する。</p>
+            </article>
+          </div>
+          <p class="section-note">推奨: 最初から <code>i18n.js</code> 分離で始める。</p>
+        </section>
+
+        <section class="section">
+          <h2>JP / EN 切替の実装タスク</h2>
+          <div class="table-wrap">
+            <table>
+              <tr>
+                <th>Phase</th>
+                <th>内容</th>
+                <th>主タスク</th>
+              </tr>
+              <tr>
+                <td>Phase 1</td>
+                <td>切替土台</td>
+                <td><code>currentLanguage</code>、<code>localStorage</code>、ヘッダー切替UI、再描画処理</td>
+              </tr>
+              <tr>
+                <td>Phase 2</td>
+                <td>静的ラベル</td>
+                <td>ヘッダー、役職タブ、各種見出し、主要ボタンを辞書化</td>
+              </tr>
+              <tr>
+                <td>Phase 3</td>
+                <td>HUD内容</td>
+                <td>Battle Phase、Objective、Duty Board、各メトリクスを切替化</td>
+              </tr>
+              <tr>
+                <td>Phase 4</td>
+                <td>動的テキスト</td>
+                <td>Bridge Log、Captain Notes、各部署報告文の定型句を辞書化</td>
+              </tr>
+              <tr>
+                <td>Phase 5</td>
+                <td>マニュアル英語版</td>
+                <td><code>manual/</code> 一式の英語版と導線追加</td>
+              </tr>
+              <tr>
+                <td>Phase 6</td>
+                <td>公開確認</td>
+                <td>公開URL、モバイル、Stage I通し、リンク切れ確認</td>
+              </tr>
+            </table>
+          </div>
+        </section>
+
+        <section class="section">
+          <h2>用語統一案</h2>
+          <div class="table-wrap">
+            <table>
+              <tr><th>日本語</th><th>英語候補</th></tr>
+              <tr><td>艦長</td><td>Captain</td></tr>
+              <tr><td>ソナー員</td><td>Sonar</td></tr>
+              <tr><td>雷撃士</td><td>Torpedo Officer</td></tr>
+              <tr><td>航海長</td><td>Navigator</td></tr>
+              <tr><td>急速潜航</td><td>Alarm Dive</td></tr>
+              <tr><td>潜望鏡深度</td><td>Periscope Depth</td></tr>
+              <tr><td>浮上双眼鏡</td><td>Surface Binoculars</td></tr>
+              <tr><td>被探知回避</td><td>Avoid Detection</td></tr>
+              <tr><td>接敵維持</td><td>Maintain Contact</td></tr>
+              <tr><td>静粛</td><td>Silent Running</td></tr>
+              <tr><td>深深度退避</td><td>Deep Evasion</td></tr>
+              <tr><td>全速離脱</td><td>Full Speed Egress</td></tr>
+            </table>
+          </div>
+        </section>
+
+        <section class="section">
+          <h2>まず着手すべき最小セット</h2>
+          <ol>
+            <li>ヘッダーに <code>JP / EN</code> 切替を入れる</li>
+            <li>役職タブと主要コマンドを英語化する</li>
+            <li>Tactical Strip と右サイド見出しを英語化する</li>
+            <li>英語版 <code>manual/index.html</code> を用意する</li>
+          </ol>
+          <p class="section-note">この4点が入るだけで、海外プレイヤーは遊び始める入口を理解できる。</p>
+        </section>
+      </div>
+    </main>
+  </body>
+</html>
