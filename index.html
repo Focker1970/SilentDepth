@@ -387,6 +387,11 @@
             </div>
             <div class="control-card">
               <span class="label">Fire Control</span>
+              <div class="button-row triple">
+                <button type="button" data-torpedo-mode="g7a_fast">G7a Fast</button>
+                <button type="button" data-torpedo-mode="g7a_medium">G7a Medium</button>
+                <button type="button" data-torpedo-mode="g7e_electric">G7e Electric</button>
+              </div>
               <div class="button-row dual">
                 <button type="button" id="torpedo-select">標的選定</button>
                 <button type="button" id="torpedo-input">諸元入力</button>
@@ -404,6 +409,7 @@
               <span class="label">Firing Sequence</span>
               <dl class="duty-list compact-duty">
                 <div><dt>段階</dt><dd id="torpedo-sequence-stage">標的待ち</dd></div>
+                <div><dt>使用魚雷</dt><dd id="torpedo-selected-mode">G7a Medium</dd></div>
                 <div><dt>選定目標</dt><dd id="torpedo-selected-target">未選定</dd></div>
                 <div><dt>使用発射管</dt><dd id="torpedo-selected-tube">未選定</dd></div>
                 <div><dt>諸元入力</dt><dd id="torpedo-input-status">未入力</dd></div>

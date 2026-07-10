@@ -73,6 +73,7 @@ const navigationReportNode = document.getElementById("navigation-report");
 const torpedoSolutionRatingNode = document.getElementById("torpedo-solution-rating");
 const torpedoGyroLimitNode = document.getElementById("torpedo-gyro-limit");
 const torpedoSequenceStageNode = document.getElementById("torpedo-sequence-stage");
+const torpedoSelectedModeNode = document.getElementById("torpedo-selected-mode");
 const torpedoSelectedTargetNode = document.getElementById("torpedo-selected-target");
 const torpedoSelectedTubeNode = document.getElementById("torpedo-selected-tube");
 const torpedoInputStatusNode = document.getElementById("torpedo-input-status");
@@ -180,6 +181,7 @@ const tdcAobIncButton = document.getElementById("tdc-aob-inc");
 const difficultyToggleButton = document.getElementById("difficulty-toggle");
 const difficultyLabelNode = document.getElementById("difficulty-label");
 const timeScaleButtons = [...document.querySelectorAll("[data-timescale]")];
+const torpedoModeButtons = [...document.querySelectorAll("[data-torpedo-mode]")];
 
 const speedButtons = [...document.querySelectorAll("[data-speed]")];
 const depthButtons = [...document.querySelectorAll("[data-depth]")];
@@ -191,8 +193,6 @@ const WORLD = { width: 12000, height: 8000 };
 const WORLD_METERS_PER_SECOND_PER_KNOT = 0.5144;
 const TACTICAL_PLOT_SCALE = 0.24;
 const DEFAULT_ESCAPE_ZONE = { x: 11150, y: 7100, radius: 320 };
-const TORPEDO_SPEED = 22;
-const TORPEDO_MAX_RANGE = 2200;
 const TORPEDO_GYRO_LIMIT = 80;
 const TORPEDO_HIT_RADIUS = 28;
 const TORPEDO_DUD_RATE = 0.08;
@@ -226,6 +226,44 @@ const UBOAT_CLASS = {
   crushDepth: 280,
   torpedoDepthMin: 10,
   torpedoDepthMax: 20
+};
+const TORPEDO_MODES = {
+  standard: {
+    id: "standard",
+    label: "標準魚雷",
+    speedKt: 22,
+    practicalRange: 1600,
+    maxRange: 2200,
+    wakeAlertBonus: 0.04,
+    stealthFactor: 1
+  },
+  g7a_fast: {
+    id: "g7a_fast",
+    label: "G7a Fast",
+    speedKt: 44,
+    practicalRange: 1800,
+    maxRange: 3500,
+    wakeAlertBonus: 0.16,
+    stealthFactor: 0.95
+  },
+  g7a_medium: {
+    id: "g7a_medium",
+    label: "G7a Medium",
+    speedKt: 40,
+    practicalRange: 2500,
+    maxRange: 5000,
+    wakeAlertBonus: 0.12,
+    stealthFactor: 0.97
+  },
+  g7e_electric: {
+    id: "g7e_electric",
+    label: "G7e Electric",
+    speedKt: 30,
+    practicalRange: 2200,
+    maxRange: 4000,
+    wakeAlertBonus: 0.03,
+    stealthFactor: 1.04
+  }
 };
 const TONNAGE_BY_TYPE = {
   convoy: 4200,
@@ -704,9 +742,10 @@ function createTorpedoTubeBank() {
   }));
 }
 
-function createTorpedoSequenceState() {
+function createTorpedoSequenceState(selectedMode = "g7a_medium") {
   return {
     stage: TORPEDO_SEQUENCE.idle,
+    selectedMode,
     selectedTargetId: null,
     selectedTubeId: null,
     dataEntered: false,
@@ -1336,6 +1375,22 @@ function distance(a, b) {
 
 function knotsToWorldSpeed(knots) {
   return knots * WORLD_METERS_PER_SECOND_PER_KNOT;
+}
+
+function getSelectedTorpedoModeId() {
+  return state.torpedoSequence?.selectedMode || "g7a_medium";
+}
+
+function getSelectedTorpedoSpec() {
+  return TORPEDO_MODES[getSelectedTorpedoModeId()] || TORPEDO_MODES.g7a_medium;
+}
+
+function getActiveTorpedoSpec() {
+  return state.difficulty === "historical" ? getSelectedTorpedoSpec() : TORPEDO_MODES.standard;
+}
+
+function torpedoSpecSummary(spec = getActiveTorpedoSpec()) {
+  return `${spec.label} / ${spec.speedKt}kt / 実用${spec.practicalRange}m / 最大${spec.maxRange}m`;
 }
 
 function bearing(from, to) {
@@ -3540,11 +3595,12 @@ function seedContacts() {
 function computeTorpedoSolution(contact) {
   const sub = state.submarine;
   const nav = state.navigationTactical;
+  const torpedo = getActiveTorpedoSpec();
   const relativeX = contact.x - sub.x;
   const relativeY = contact.y - sub.y;
   const contactVelocityX = Math.cos(toRadians(contact.heading)) * knotsToWorldSpeed(contact.speed);
   const contactVelocityY = Math.sin(toRadians(contact.heading)) * knotsToWorldSpeed(contact.speed);
-  const torpedoSpeedWorld = knotsToWorldSpeed(TORPEDO_SPEED);
+  const torpedoSpeedWorld = knotsToWorldSpeed(torpedo.speedKt);
 
   const a =
     contactVelocityX * contactVelocityX +
@@ -3591,10 +3647,15 @@ function computeTorpedoSolution(contact) {
     leadBearing,
     gyroAngle,
     aspect,
+    torpedoModeId: torpedo.id,
+    torpedoLabel: torpedo.label,
+    torpedoSpeedKt: torpedo.speedKt,
+    practicalRange: torpedo.practicalRange,
+    maxRange: torpedo.maxRange,
     solutionRating: nav.solutionRating,
     effectiveGyroLimit: TORPEDO_GYRO_LIMIT - (1 - nav.solutionRating) * 12,
     shotValid:
-      interceptRange <= TORPEDO_MAX_RANGE * (0.82 + nav.solutionRating * 0.18) &&
+      interceptRange <= torpedo.maxRange * (0.82 + nav.solutionRating * 0.18) &&
       Math.abs(gyroAngle) <= TORPEDO_GYRO_LIMIT - (1 - nav.solutionRating) * 12 &&
       sub.depth >= UBOAT_CLASS.torpedoDepthMin &&
       sub.depth <= UBOAT_CLASS.torpedoDepthMax
@@ -4369,6 +4430,14 @@ function updateButtons() {
     button.classList.toggle("active", Number(button.dataset.timescale) === state.timeScale);
   }
 
+  for (const button of torpedoModeButtons) {
+    const activeMode =
+      state.difficulty === "historical" &&
+      button.dataset.torpedoMode === state.torpedoSequence.selectedMode;
+    setButtonState(button, "active", activeMode);
+    setButtonState(button, "dim", state.difficulty !== "historical");
+  }
+
   const periscopeUsable = isPeriscopeDepth(state.submarine) || state.viewMode === "periscope";
   const binocularUsable = isFullySurfaced(state.submarine) || state.viewMode === "binocular";
   setButtonState(captainPeriscopeButton, "active", state.viewMode === "periscope");
@@ -4536,6 +4605,7 @@ function selectedTorpedoFireStatus() {
   const sub = state.submarine;
   const selectedShot = getSelectedTorpedoSolution();
   const selectedTube = findTubeById(state.torpedoSequence.selectedTubeId, sub);
+  const torpedo = getActiveTorpedoSpec();
 
   if (!selectedShot) {
     return {
@@ -4596,10 +4666,13 @@ function selectedTorpedoFireStatus() {
   }
 
   if (!selectedShot.shotValid) {
+    const beyondRange = selectedShot.interceptRange > torpedo.maxRange;
     return {
       ready: false,
       label: "射点未成立",
-      detail: "進角または射程が不適。さらに接敵して解を整える。"
+      detail: beyondRange
+        ? `${torpedo.label} 最大射程 ${torpedo.maxRange}m 外。さらに接敵が必要。`
+        : "進角または射程が不適。さらに接敵して解を整える。"
     };
   }
 
@@ -4614,7 +4687,11 @@ function selectedTorpedoFireStatus() {
   return {
     ready: true,
     label: "発射可能",
-    detail: `${contactLabel(selectedShot.contact)} へ発射可能。`
+    detail:
+      `${contactLabel(selectedShot.contact)} へ発射可能。` +
+      (selectedShot.range > torpedo.practicalRange
+        ? ` ただし ${torpedo.label} 実用射程 ${torpedo.practicalRange}m 超過。`
+        : ` ${torpedo.label} ${torpedo.speedKt}kt。`)
   };
 }
 
@@ -5105,6 +5182,7 @@ function updateHud() {
           detail: `${state.binocularAttackReason} 露見 ${state.binocularExposureTimer.toFixed(1)}s`
         }
       : objective;
+  const hudTorpedoSpec = getActiveTorpedoSpec();
   hudObjectiveNode.textContent = binocularObjective.label;
   hudObjectiveNoteNode.textContent = binocularObjective.detail;
   hudTorpedoStatusNode.textContent = nextImpactTorpedo
@@ -5123,20 +5201,20 @@ function updateHud() {
             ? "Securing"
             : "Armed";
   hudTorpedoNoteNode.textContent = nextImpactTorpedo
-    ? `走行中魚雷 ${state.torpedoesInWater.length} 本 / 命中音または失走報告を待機`
+    ? `${hudTorpedoSpec.label} 走行中魚雷 ${state.torpedoesInWater.length} 本 / 命中音または失走報告を待機`
     : state.torpedoSequence.stage === TORPEDO_SEQUENCE.preparing
-    ? `${state.torpedoSequence.prepMode === "surfaced" ? "浮上射法" : "潜航射法"} / ${
+    ? `${hudTorpedoSpec.label} / ${state.torpedoSequence.prepMode === "surfaced" ? "浮上射法" : "潜航射法"} / ${
         tubeStatusText
       }`
     : state.torpedoSequence.selectedTargetId
-      ? selectedFire.detail
+      ? `${hudTorpedoSpec.label} / ${selectedFire.detail}`
     : bestShot
-      ? `${playerContactLabel(bestShot.contact)} 距離 ${Math.round(bestShot.range)}m / 進角 ${formatSigned(
+      ? `${hudTorpedoSpec.label} / ${playerContactLabel(bestShot.contact)} 距離 ${Math.round(bestShot.range)}m / 進角 ${formatSigned(
           bestShot.gyroAngle
         )}°`
       : state.alarmDive.active
         ? "急速潜航中。発射管作業停止。"
-        : "発射管待機。射撃解なし。";
+        : `${hudTorpedoSpec.label} 待機。射撃解なし。`;
   const jam = acousticJammingFactor();
   hudAcousticModeNode.textContent = state.pingCooldown > 9
     ? "Active Return"
@@ -5268,10 +5346,11 @@ function updateHud() {
     })
     .join("");
 
+  const torpedoSpec = getActiveTorpedoSpec();
   if (bestShot) {
-    torpedoSolutionNode.textContent = `${playerContactLabel(bestShot.contact)} 距離 ${Math.round(
+    torpedoSolutionNode.textContent = `${torpedoSpec.label} ${torpedoSpec.speedKt}kt / ${playerContactLabel(bestShot.contact)} 距離 ${Math.round(
       bestShot.range
-    )}m / 進角 ${formatSigned(bestShot.gyroAngle)}° / AOB ${formatSigned(
+    )}m / 実用${torpedoSpec.practicalRange}m / 進角 ${formatSigned(bestShot.gyroAngle)}° / AOB ${formatSigned(
       bestShot.aspect
     )}° / 会敵 ${bestShot.interceptTime.toFixed(1)}秒 / 解精度 ${Math.round(
       bestShot.solutionRating * 100
@@ -5305,8 +5384,11 @@ function updateHud() {
           : state.torpedoSequence.stage === TORPEDO_SEQUENCE.tubeReady
             ? "発射準備"
             : state.torpedoSequence.stage === TORPEDO_SEQUENCE.fired
-              ? "発射済み"
+            ? "発射済み"
               : "命中判定";
+  if (torpedoSelectedModeNode) {
+    torpedoSelectedModeNode.textContent = `${torpedoSpec.label} / ${torpedoSpec.speedKt}kt / 実用${torpedoSpec.practicalRange}m`;
+  }
   torpedoSelectedTargetNode.textContent = selectedShot
     ? contactLabel(selectedShot.contact)
     : "未選定";
@@ -5362,13 +5444,13 @@ function updateHud() {
       : sonarAdvisor.detail;
 
   torpedoReportDetailNode.textContent = state.torpedoSequence.selectedTargetId
-    ? `報告: ${selectedFire.label}。${selectedFire.detail}`
+    ? `報告: ${torpedoSpec.label} / ${selectedFire.label}。${selectedFire.detail}`
     : state.viewMode === "binocular" && binocularFocus
       ? `報告: 双眼鏡で ${contactLabel(binocularFocus)} を捕捉。方位 ${Math.round(
           normalizeAngle(bearing(sub, binocularFocus) - sub.heading)
-        )}°。標的選定 -> 方位同期 -> 距離同期 -> Speed/AOB採用 -> 諸元入力。`
+        )}°。${torpedoSpec.label} を使用。標的選定 -> 方位同期 -> 距離同期 -> Speed/AOB採用 -> 諸元入力。`
     : bestShot
-      ? `報告: ${playerContactLabel(bestShot.contact)} に対し進角 ${formatSigned(
+      ? `報告: ${torpedoSpec.label} で ${playerContactLabel(bestShot.contact)} に対し進角 ${formatSigned(
           bestShot.gyroAngle
         )}°、AOB ${formatSigned(bestShot.aspect)}°、解精度 ${Math.round(
           bestShot.solutionRating * 100
@@ -5541,7 +5623,7 @@ function resetGame() {
     relativeTargetBearing: null,
     estimatedRange: null
   };
-  state.torpedoSequence = createTorpedoSequenceState();
+  state.torpedoSequence = createTorpedoSequenceState(state.torpedoSequence?.selectedMode || "g7a_medium");
   state.periscopeControl = {
     reticleReading: 3.0,
     focusContactId: null,
@@ -6029,6 +6111,7 @@ function activePing() {
 
 function fireTorpedo() {
   const sub = state.submarine;
+  const torpedo = getActiveTorpedoSpec();
   const fireStatus = selectedTorpedoFireStatus();
   const firingTube = findTubeById(state.torpedoSequence.selectedTubeId, sub);
   const riskyBinocularShot =
@@ -6097,7 +6180,7 @@ function fireTorpedo() {
   const fireHeading = usesTDC ? state.tdc.absoluteFireBearing : target.leadBearing;
   const fireGyro = usesTDC ? state.tdc.gyroAngle : target.gyroAngle;
   const fireLife = (usesTDC && state.tdc.range !== null)
-    ? state.tdc.range / knotsToWorldSpeed(TORPEDO_SPEED) + 12
+    ? state.tdc.range / knotsToWorldSpeed(torpedo.speedKt) + 12
     : target.interceptTime + 12;
 
   firingTube.loaded = false;
@@ -6122,15 +6205,18 @@ function fireTorpedo() {
     x: sub.x,
     y: sub.y,
     heading: fireHeading,
-    speed: knotsToWorldSpeed(TORPEDO_SPEED),
+    speed: knotsToWorldSpeed(torpedo.speedKt),
     traveled: 0,
+    maxRange: torpedo.maxRange,
+    modeId: torpedo.id,
+    label: torpedo.label,
     targetId: target.contact.id,
     life: fireLife,
     interceptCountdown: target.interceptTime,
     hitChance: computeTorpedoHitChance(target, usesTDC)
   });
   addLog(
-    `雷撃。管 ${firingTube.label} から ${contactLabel(target.contact)} へ進角 ${formatSigned(
+    `雷撃。${torpedo.label}、管 ${firingTube.label} から ${contactLabel(target.contact)} へ進角 ${formatSigned(
       target.gyroAngle
     )}°、会敵 ${target.interceptTime.toFixed(1)} 秒。`
   );
@@ -6162,7 +6248,7 @@ function fireTorpedo() {
             ? 0.45
             : 0.25
           : 0;
-      contact.alert = clamp(contact.alert + 0.4 + binocularBonus, 0, 1);
+      contact.alert = clamp(contact.alert + 0.4 + binocularBonus + torpedo.wakeAlertBonus, 0, 1);
     }
   }
 
@@ -6559,22 +6645,32 @@ function updateContacts(deltaTime) {
 function computeTorpedoHitChance(solution, usesTDC) {
   const seq = state.torpedoSequence;
   const sub = state.submarine;
-  const rangeFactor = clamp(1 - solution.range / (TORPEDO_MAX_RANGE * 1.1), 0.2, 1);
+  const torpedo = getActiveTorpedoSpec();
+  const rangeFactor = clamp(1 - solution.range / (torpedo.maxRange * 1.08), 0.14, 1);
+  const practicalOverflow = Math.max(0, solution.range - torpedo.practicalRange);
+  const practicalSpan = Math.max(1, torpedo.maxRange - torpedo.practicalRange);
+  const practicalRangeFactor =
+    practicalOverflow <= 0
+      ? 1
+      : clamp(1 - practicalOverflow / practicalSpan, 0.32, 0.9);
   const gyroFactor = clamp(
     1 - Math.abs(solution.gyroAngle) / Math.max(1, solution.effectiveGyroLimit),
     0.35,
     1
   );
+  const torpedoSpeedFactor = clamp(torpedo.speedKt / 40, 0.84, 1.08);
   const sourceFactor = solution.contact.visualDetected ? 1 : 0.78;
   const tdcFactor = usesTDC ? 1 : state.difficulty === "historical" ? 0.85 : 0.93;
   const depthFactor =
     sub.depth >= UBOAT_CLASS.torpedoDepthMin && sub.depth <= UBOAT_CLASS.torpedoDepthMax ? 1 : 0.65;
   const prepFactor = seq.outerDoorOpen ? 1 : 0.72;
-  const stealthFactor = state.silentRunning ? 1.04 : 0.98;
+  const stealthFactor = (state.silentRunning ? 1.04 : 0.98) * torpedo.stealthFactor;
   const baseChance = clamp(
     solution.solutionRating *
       rangeFactor *
+      practicalRangeFactor *
       gyroFactor *
+      torpedoSpeedFactor *
       sourceFactor *
       tdcFactor *
       depthFactor *
@@ -6585,18 +6681,20 @@ function computeTorpedoHitChance(solution, usesTDC) {
   );
   const closeRangeBonus =
     solution.range <= 700
-      ? 0.22
+      ? 0.28
       : solution.range <= 1000
-        ? 0.14
+        ? 0.18
         : solution.range <= 1400
-          ? 0.06
+          ? 0.08
+          : solution.range <= 1800
+            ? 0.02
           : 0;
   const tdcBonus = usesTDC && solution.shotValid ? 0.12 : 0;
   const visualBonus = solution.contact.visualDetected ? 0.05 : 0;
   const stableShotFloor =
-    usesTDC && solution.shotValid && solution.range <= 1000
+    usesTDC && solution.shotValid && solution.range <= Math.min(1000, torpedo.practicalRange)
       ? state.difficulty === "historical"
-        ? 0.72
+        ? 0.74
         : 0.8
       : state.difficulty === "historical"
         ? 0.22
@@ -6634,7 +6732,7 @@ function resolveTorpedoHit(contact) {
   }
 
   state.torpedoSequence = {
-    ...createTorpedoSequenceState(),
+    ...createTorpedoSequenceState(state.torpedoSequence.selectedMode),
     stage: TORPEDO_SEQUENCE.assessing,
     lastFiredTargetId: contact.id,
     lastFiredTubeId: state.torpedoSequence.lastFiredTubeId,
@@ -6680,7 +6778,7 @@ function updateTorpedoes(deltaTime) {
       } else {
         emitGermanRepeater("torpedoMiss");
         state.torpedoSequence = {
-          ...createTorpedoSequenceState(),
+          ...createTorpedoSequenceState(state.torpedoSequence.selectedMode),
           stage: TORPEDO_SEQUENCE.assessing,
           lastFiredTargetId: torpedo.targetId,
           lastFiredTubeId: state.torpedoSequence.lastFiredTubeId,
@@ -6692,9 +6790,9 @@ function updateTorpedoes(deltaTime) {
       continue;
     }
 
-    if (torpedo.traveled >= TORPEDO_MAX_RANGE || torpedo.life <= 0) {
+    if (torpedo.traveled >= (torpedo.maxRange ?? getActiveTorpedoSpec().maxRange) || torpedo.life <= 0) {
       state.torpedoSequence = {
-        ...createTorpedoSequenceState(),
+        ...createTorpedoSequenceState(state.torpedoSequence.selectedMode),
         stage: TORPEDO_SEQUENCE.assessing,
         lastFiredTargetId: torpedo.targetId,
         lastFiredTubeId: state.torpedoSequence.lastFiredTubeId,
@@ -7264,6 +7362,7 @@ function drawBearingPlot(camera) {
 
 function getTorpedoPreview() {
   if (state.station !== "torpedo") return null;
+  const torpedo = getActiveTorpedoSpec();
 
   const selectedTarget = state.torpedoSequence.selectedTargetId
     ? state.contacts.find(
@@ -7289,8 +7388,8 @@ function getTorpedoPreview() {
   const start = { x: state.submarine.x, y: state.submarine.y };
   const courseBearing = usesTDC ? tdc.absoluteFireBearing : shot.leadBearing;
   const plannedRange = usesTDC
-    ? Math.min(tdc.range, TORPEDO_MAX_RANGE)
-    : Math.min(shot.interceptRange, TORPEDO_MAX_RANGE);
+    ? Math.min(tdc.range, torpedo.maxRange)
+    : Math.min(shot.interceptRange, torpedo.maxRange);
   const end = {
     x: start.x + Math.cos(toRadians(courseBearing)) * plannedRange,
     y: start.y + Math.sin(toRadians(courseBearing)) * plannedRange
@@ -7299,6 +7398,7 @@ function getTorpedoPreview() {
   return {
     contact,
     usesTDC,
+    torpedoLabel: torpedo.label,
     courseBearing,
     plannedRange,
     start,
@@ -8206,15 +8306,51 @@ function setTimeScale(value) {
   setStatus(`時間倍率 ${value}x。`, "good");
 }
 
+function selectTorpedoMode(modeId) {
+  const nextMode = TORPEDO_MODES[modeId];
+  if (!nextMode || modeId === "standard") return;
+  if (state.difficulty !== "historical") {
+    setStatus("魚雷種別切替は Historical モードで有効。", "warning");
+    return;
+  }
+  if (state.torpedoSequence.selectedMode === nextMode.id) return;
+
+  state.torpedoSequence.selectedMode = nextMode.id;
+  if (
+    state.torpedoSequence.prepStepIndex >= 0 ||
+    state.torpedoSequence.prepMode ||
+    state.torpedoSequence.tubeReady
+  ) {
+    state.torpedoSequence.tubeReady = false;
+    state.torpedoSequence.flooded = false;
+    state.torpedoSequence.equalized = false;
+    state.torpedoSequence.outerDoorOpen = false;
+    state.torpedoSequence.prepMode = null;
+    state.torpedoSequence.prepSteps = [];
+    state.torpedoSequence.prepStepIndex = -1;
+    state.torpedoSequence.prepStepRemaining = 0;
+    updateTorpedoSequenceStage();
+    addLog(`魚雷種別を ${nextMode.label} へ変更。発射準備を再実施。`);
+    setStatus(`${torpedoSpecSummary(nextMode)}。発射準備をやり直してください。`, "warning");
+  } else {
+    setStatus(`${torpedoSpecSummary(nextMode)} に切替。`, "good");
+  }
+  computeTDCSolution();
+  updateTDCDisplay();
+  updateHud();
+  updateButtons();
+}
+
 function computeTDCSolution() {
   const tdc = state.tdc;
+  const torpedo = getActiveTorpedoSpec();
   if (tdc.bearing === null || tdc.speedKt === null || tdc.aob === null) {
     tdc.gyroAngle = null;
     tdc.absoluteFireBearing = null;
     tdc.valid = false;
     return;
   }
-  const sinLead = (tdc.speedKt / TORPEDO_SPEED) * Math.sin(toRadians(tdc.aob));
+  const sinLead = (tdc.speedKt / torpedo.speedKt) * Math.sin(toRadians(tdc.aob));
   if (Math.abs(sinLead) > 1) {
     tdc.gyroAngle = null;
     tdc.absoluteFireBearing = null;
@@ -8228,7 +8364,7 @@ function computeTDCSolution() {
   tdc.absoluteFireBearing = absoluteFireBearing;
   tdc.valid =
     Math.abs(gyroAngle) <= TORPEDO_GYRO_LIMIT &&
-    (tdc.range === null || tdc.range <= TORPEDO_MAX_RANGE);
+    (tdc.range === null || tdc.range <= torpedo.maxRange);
 }
 
 function applySuggestedSpeed() {
@@ -8380,6 +8516,7 @@ function updateTDCEstimates() {
 
 function updateTDCDisplay() {
   const tdc = state.tdc;
+  const torpedo = getActiveTorpedoSpec();
   if (tdcBearingNode) tdcBearingNode.textContent = tdc.bearing !== null ? Math.round(tdc.bearing) : "---";
   if (tdcRangeNode) tdcRangeNode.textContent = tdc.range !== null ? tdc.range : "---";
   if (tdcSpeedNode) tdcSpeedNode.textContent = tdc.speedKt !== null ? tdc.speedKt.toFixed(1) : "---";
@@ -8393,7 +8530,7 @@ function updateTDCDisplay() {
       tdc.suggestedAob !== null ? formatSigned(Math.round(tdc.suggestedAob)) : "---";
   }
   if (tdcEstimateNoteNode) {
-    tdcEstimateNoteNode.textContent = tdc.estimateNote;
+    tdcEstimateNoteNode.textContent = `${torpedo.label} ${torpedo.speedKt}kt / 実用${torpedo.practicalRange}m。 ${tdc.estimateNote}`;
   }
   if (tdcGyroNode) tdcGyroNode.textContent = tdc.gyroAngle !== null ? formatSigned(Math.round(tdc.gyroAngle)) : "---";
   if (tdcValidNode) {
@@ -8914,6 +9051,9 @@ for (const button of stationTabs) {
 
 for (const button of holdCourseButtons) {
   button.addEventListener("click", holdCourse);
+}
+for (const button of torpedoModeButtons) {
+  button.addEventListener("click", () => selectTorpedoMode(button.dataset.torpedoMode));
 }
 navHoldCourseButton?.addEventListener("click", holdCourse);
 pingButton?.addEventListener("click", activePing);
