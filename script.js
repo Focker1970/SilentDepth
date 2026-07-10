@@ -233,6 +233,11 @@ const TONNAGE_BY_TYPE = {
   escort: 1800
 };
 const CAMPAIGN_SAVE_KEY = "silentdepth-campaign-save-v1";
+const DEPTH_BANDS = {
+  surfaced: 1,
+  awash: 6,
+  periscope: 16
+};
 const MAST_HEIGHT = { escort: 14, flagship: 18, convoy: 12 };
 const MAST_K = 1600;
 const RETICLE_TICK_SPACING = 20;
@@ -1811,12 +1816,31 @@ function noiseLabel(noise) {
   return "危険";
 }
 
+function isFullySurfaced(sub = state.submarine) {
+  return sub.depth <= DEPTH_BANDS.surfaced;
+}
+
+function isAwash(sub = state.submarine) {
+  return sub.depth > DEPTH_BANDS.surfaced && sub.depth <= DEPTH_BANDS.awash;
+}
+
+function isPeriscopeDepth(sub = state.submarine) {
+  return sub.depth > DEPTH_BANDS.awash && sub.depth <= DEPTH_BANDS.periscope;
+}
+
 function isSurfaced(sub = state.submarine) {
-  return sub.depth < 5;
+  return isFullySurfaced(sub);
 }
 
 function propulsionModeLabel(sub = state.submarine) {
-  return isSurfaced(sub) ? "ディーゼル / 充電" : "電動機";
+  return isFullySurfaced(sub) ? "ディーゼル / 充電" : "電動機";
+}
+
+function depthBandLabel(sub = state.submarine) {
+  if (isFullySurfaced(sub)) return "完全浮上";
+  if (isAwash(sub)) return "半没";
+  if (isPeriscopeDepth(sub)) return "潜望鏡深度";
+  return "潜航";
 }
 
 function currentPeriscopeBearing() {
@@ -2873,7 +2897,7 @@ function shouldAutoTriggerAlarmDive() {
   if (sub.depth > 20 && state.viewMode !== "binocular" && state.viewMode !== "periscope") {
     return false;
   }
-  const surfacedRisk = state.viewMode === "binocular" || sub.depth < 8;
+  const surfacedRisk = state.viewMode === "binocular" || sub.depth <= DEPTH_BANDS.awash;
   const closeEscort = state.contacts.some(
     (contact) =>
       contact.hostile &&
@@ -4169,9 +4193,9 @@ function updateVisualContacts() {
     const relBearing = Math.abs(normalizeAngle(bearing(sub, contact) - opticsBearing));
     let visible = false;
 
-    if (state.viewMode === "binocular" && sub.depth < 5) {
+    if (state.viewMode === "binocular" && isFullySurfaced(sub)) {
       visible = range < binocularRangeLimit && relBearing < 55;
-    } else if (state.viewMode === "periscope" && sub.depth < 18) {
+    } else if (state.viewMode === "periscope" && isPeriscopeDepth(sub)) {
       visible =
         range < (nav.periscopeStable ? periscopeStableRange : periscopeUnstableRange) &&
         relBearing < (nav.periscopeStable ? 38 : 32);
@@ -4188,9 +4212,8 @@ function updateNavigationTacticalState() {
   const speedError = Math.abs(sub.targetSpeed - sub.speed);
   const periscopeStable =
     state.viewMode === "periscope" &&
-    sub.targetDepth <= 14 &&
-    sub.depth >= 11 &&
-    sub.depth <= 15 &&
+    sub.targetDepth <= 15 &&
+    isPeriscopeDepth(sub) &&
     headingError < 4 &&
     sub.speed <= 4.2;
 
@@ -5135,15 +5158,15 @@ function updateHud() {
     : stage.id === "training_shot"
     ? `${detectedContacts > 0 ? `${detectedContacts} 件の接触。` : "単独商船を探索中。"} 速力 ${sub.speed.toFixed(
         1
-      )}kt、深度 ${Math.round(sub.depth)}m。${light.label}。潜望鏡観測から雷撃解構築までを確認。`
+      )}kt、深度 ${Math.round(sub.depth)}m (${depthBandLabel(sub)})。${light.label}。潜望鏡観測から雷撃解構築までを確認。`
     : stage.id === "destroyer_escape"
     ? `駆逐艦回避訓練。離脱海域まで ${Math.round(distance(sub, state.escapeZone))}m。探知度 ${Math.round(
         sub.detection * 100
-      )}%。${light.label}。機関 ${propulsionModeLabel(sub)}。`
+      )}%。${light.label}。${depthBandLabel(sub)} / 機関 ${propulsionModeLabel(sub)}。`
     : flagshipAlive
     ? `探知度 ${Math.round(sub.detection * 100)}%。${
         detectedContacts > 0 ? `${detectedContacts} 件の接触あり。` : "接触はまだ薄い。"
-      } 速力 ${sub.speed.toFixed(1)}kt、深度 ${Math.round(sub.depth)}m。${light.label}。接触精度 ${Math.round(
+      } 速力 ${sub.speed.toFixed(1)}kt、深度 ${Math.round(sub.depth)}m (${depthBandLabel(sub)})。${light.label}。接触精度 ${Math.round(
         tactical.precision * 100
       )}% / 回り込み ${Math.round(tactical.positioning * 100)}% / 射点形成 ${Math.round(
         tactical.firingLane * 100
@@ -5647,7 +5670,7 @@ function setViewMode(mode) {
     addLog("潜望鏡深度へ。艦長、上方監視。");
     setStatus("潜望鏡モード。視界を得るが被発見の危険が上がる。", "warning");
   } else if (mode === "binocular") {
-    if (!isSurfaced(state.submarine)) {
+    if (!isFullySurfaced(state.submarine)) {
       issueCaptainIntent("surface");
       setStatus("双眼鏡を使うには先に浮上が必要。まず浮上命令を実施。", "warning");
       return;
@@ -5729,20 +5752,43 @@ function commandDepth(value) {
   }
   value = Math.min(value, UBOAT_CLASS.practicalDepth);
   state.submarine.targetDepth = value;
-  if (value > 20 && state.viewMode !== "normal") {
+  if (value > DEPTH_BANDS.periscope && state.viewMode !== "normal") {
     state.viewMode = "normal";
   }
+  const depthLabel =
+    value <= DEPTH_BANDS.surfaced
+      ? "完全浮上"
+      : value <= DEPTH_BANDS.awash
+        ? "半没"
+        : value <= DEPTH_BANDS.periscope
+          ? "潜望鏡深度"
+          : `深度 ${value}m`;
   setCommandState({
-    captainOrder: `艦長命令: 深度 ${value}m`,
+    captainOrder: `艦長命令: ${depthLabel}`,
     priorityLabel: value <= 20 ? "警戒" : "通常",
     priorityTone: value <= 20 ? "high" : "normal",
-    navigation: `潜舵手、深度 ${value}m を実施`,
-    sonar: value <= 20 ? "表層雑音を考慮して聴音" : "水中接触を継続追尾"
+    navigation:
+      value <= DEPTH_BANDS.surfaced
+        ? "完全浮上、見張りとディーゼル運転"
+        : value <= DEPTH_BANDS.awash
+          ? "半没、即潜航可能な浅深度を保持"
+          : value <= DEPTH_BANDS.periscope
+            ? "潜望鏡深度を保持"
+            : `潜舵手、深度 ${value}m を実施`,
+    sonar: value <= DEPTH_BANDS.awash ? "表層雑音を考慮して聴音" : "水中接触を継続追尾"
   });
   emitDepthVoice(value);
   state.voiceRuntime.lastDepthReachedTarget = null;
-  addLog(`深度 ${value}m を指示。`);
-  setStatus(`深度 ${value}m へ潜航。`);
+  addLog(`${depthLabel} を指示。`);
+  setStatus(
+    value <= DEPTH_BANDS.surfaced
+      ? "完全浮上。双眼鏡とディーゼル充電が可能。"
+      : value <= DEPTH_BANDS.awash
+        ? "半没。被発見は浮上より低いが、双眼鏡と充電は不可。"
+        : value <= DEPTH_BANDS.periscope
+          ? "潜望鏡深度。潜望鏡観測と潜航雷撃が可能。"
+          : `深度 ${value}m へ潜航。`
+  );
   updateButtons();
 }
 
@@ -6120,7 +6166,9 @@ function fireTorpedo() {
 function updateSubmarine(deltaTime) {
   const sub = state.submarine;
   const nav = state.navigationTactical;
-  const surfaced = isSurfaced(sub);
+  const fullySurfaced = isFullySurfaced(sub);
+  const awash = isAwash(sub);
+  const surfaced = fullySurfaced;
   const prevSurfaced = state.voiceRuntime.lastSurfaced;
   const prevX = sub.x;
   const prevY = sub.y;
@@ -6177,7 +6225,16 @@ function updateSubmarine(deltaTime) {
   state.gridParallax.y = (state.gridParallax.y * 0.92 + movedY * gridFlowFactor) % 500;
 
   const speedNoise = sub.speed / 12;
-  const depthNoise = sub.depth < 50 ? 0.12 : sub.depth > 200 ? 0.08 : 0.02;
+  const depthNoise =
+    fullySurfaced
+      ? 0.16
+      : awash
+        ? 0.09
+        : sub.depth < 50
+          ? 0.12
+          : sub.depth > 200
+            ? 0.08
+            : 0.02;
   const opticsNoise =
     state.viewMode === "binocular" ? 0.2 : state.viewMode === "periscope" ? 0.08 : 0;
   sub.noise = clamp(
@@ -6191,7 +6248,7 @@ function updateSubmarine(deltaTime) {
     1
   );
 
-  if (surfaced) {
+  if (fullySurfaced) {
     const dieselChargeRate =
       sub.speed <= 1
         ? 0.045
@@ -6251,7 +6308,7 @@ function updateSubmarine(deltaTime) {
 
   sub.detection = clamp(sub.detection - deltaTime * 0.04, 0, 1);
   sub.detection = clamp(sub.detection - deltaTime * nav.stealthBonus * 0.35, 0, 1);
-  if (state.viewMode === "binocular" && sub.depth < 5) {
+  if (state.viewMode === "binocular" && fullySurfaced) {
     const binocularDetectRate =
       state.binocularAttackState === "allowed"
         ? 0.08
@@ -6263,12 +6320,14 @@ function updateSubmarine(deltaTime) {
       0,
       1
     );
-  } else if (state.viewMode === "periscope" && sub.depth < 18) {
+  } else if (state.viewMode === "periscope" && isPeriscopeDepth(sub)) {
     sub.detection = clamp(
       sub.detection + deltaTime * 0.03 * lightConditionMeta().periscopeDetectionFactor,
       0,
       1
     );
+  } else if (awash) {
+    sub.detection = clamp(sub.detection + deltaTime * 0.016, 0, 1);
   }
   if (state.alarmDive.active) {
     sub.detection = clamp(sub.detection + deltaTime * (sub.depth < 12 ? 0.06 : -0.02), 0, 1);
@@ -7415,7 +7474,7 @@ function drawOverlay() {
     const metricCards = [
       { label: "深度", value: `${Math.round(sub.depth)}m` },
       { label: "速力", value: `${sub.speed.toFixed(1)}kt` },
-      { label: "機関", value: isSurfaced(sub) ? "ディーゼル" : "電動機" },
+      { label: "機関", value: isFullySurfaced(sub) ? "ディーゼル" : "電動機" },
       { label: "被探知", value: `${Math.round(sub.detection * 100)}%` }
     ];
     const escortContacts = state.contacts.filter(
