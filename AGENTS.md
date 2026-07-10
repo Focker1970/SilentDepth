@@ -18,7 +18,7 @@
 ### 更新手順
 
 1. ファイルを開く:
-   `/Users/masatoueda/Documents/なんでも/SilentDepth/GAME_SPEC.html`
+   `/Users/masatoueda/Documents/my-game-silentdepth/docs/spec.html`
 
 2. `<section id="s10">` 内の `<table>` 末尾（`</table>` の直前）に行を追加する:
 
