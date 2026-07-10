@@ -4369,7 +4369,9 @@ function updateButtons() {
     button.classList.toggle("active", Number(button.dataset.timescale) === state.timeScale);
   }
 
+  const periscopeUsable = isPeriscopeDepth(state.submarine) || state.viewMode === "periscope";
   setButtonState(captainPeriscopeButton, "active", state.viewMode === "periscope");
+  setButtonState(captainPeriscopeButton, "dim", !periscopeUsable);
   setButtonState(captainBinocularButton, "active", state.viewMode === "binocular");
   setButtonState(captainBinocularButton, "dim", state.binocularAttackState === "blocked");
   setButtonState(captainAlarmButton, "active", state.alarmDive.active);
@@ -8923,7 +8925,13 @@ captainIntentSurfaceButton?.addEventListener("click", () => issueCaptainIntent("
 captainIntentDeepButton?.addEventListener("click", () => issueCaptainIntent("deep"));
 captainIntentQuietStarboardButton?.addEventListener("click", () => issueCaptainIntent("quiet_starboard"));
 captainIntentEgressButton?.addEventListener("click", () => issueCaptainIntent("egress"));
-captainPeriscopeButton?.addEventListener("click", () => setViewMode("periscope"));
+captainPeriscopeButton?.addEventListener("click", () => {
+  if (!isPeriscopeDepth(state.submarine) && state.viewMode !== "periscope") {
+    setStatus("潜望鏡は潜望鏡深度でのみ使用可能。先に 15m まで上げてください。", "warning");
+    return;
+  }
+  setViewMode("periscope");
+});
 captainBinocularButton?.addEventListener("click", () => setViewMode("binocular"));
 captainNormalViewButton?.addEventListener("click", () => {
   if (!state.alarmDive.active && state.alarmDive.resolved === "success") {
