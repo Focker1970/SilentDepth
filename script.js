@@ -8289,9 +8289,9 @@ function syncTDCBearing() {
 }
 
 function syncTDCRange() {
-  let r = state.periscopeControl.lastMeasuredRange;
+  let r = null;
   const selectedTargetId = state.torpedoSequence.selectedTargetId || null;
-  if (r === null && state.viewMode === "binocular") {
+  if (state.viewMode === "binocular") {
     const focus = getPeriscopeVisuals().find(
       (entry) => entry.id === state.periscopeControl.focusContactId
     ) ?? null;
@@ -8301,6 +8301,8 @@ function syncTDCRange() {
       const observed = getOrCreateObserved(focus.id);
       observed.lastRange = r;
     }
+  } else {
+    r = state.periscopeControl.lastMeasuredRange;
   }
   if (r === null) {
     setStatus(
