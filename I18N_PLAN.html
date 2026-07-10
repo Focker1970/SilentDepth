@@ -232,16 +232,44 @@
             <article class="card">
               <h3>Phase A</h3>
               <p>ヘッダー、役職名、主要ボタン、HUD見出しが <code>JP / EN</code> で切り替わる。</p>
+              <p>対応実装: <code>Phase 1-2</code></p>
             </article>
             <article class="card">
               <h3>Phase B</h3>
               <p>Duty Board、主要報告文、Campaign Status を含むゲーム主要導線が英語でも成立する。</p>
+              <p>対応実装: <code>Phase 3-4</code></p>
             </article>
             <article class="card">
               <h3>Phase C</h3>
               <p><code>manual/</code> 一式と Bridge Log まで含めて、多言語版公開が成立する。</p>
+              <p>対応実装: <code>Phase 5-6</code></p>
             </article>
           </div>
+        </section>
+
+        <section class="section">
+          <h2>事前調査</h2>
+          <div class="grid two">
+            <article class="card">
+              <h3>現状把握</h3>
+              <ul>
+                <li><code>script.js</code>: <code>9,095</code> 行</li>
+                <li>日本語を含む行: <code>985</code> 行</li>
+              </ul>
+            </article>
+            <article class="card">
+              <h3>重点領域</h3>
+              <ul>
+                <li>役職定義</li>
+                <li>Alarm Dive</li>
+                <li>復唱テンプレート</li>
+                <li>Bridge Log</li>
+                <li>各部署報告</li>
+                <li>HUD要約</li>
+              </ul>
+            </article>
+          </div>
+          <p class="section-note">多言語化着手前に、文言を静的UI / 動的報告 / ログ / 音声グロスへ棚卸しする。</p>
         </section>
 
         <section class="section">
@@ -341,6 +369,11 @@
                 <th>主タスク</th>
               </tr>
               <tr>
+                <td>Phase 0</td>
+                <td>文言棚卸し</td>
+                <td><code>script.js</code> の日本語文言洗い出し、件数記録、カテゴリ分類</td>
+              </tr>
+              <tr>
                 <td>Phase 1</td>
                 <td>切替土台</td>
                 <td><code>currentLanguage</code>、<code>localStorage</code>、ヘッダー切替UI、再描画処理</td>
@@ -383,6 +416,13 @@
               <tr><td>ソナー員</td><td>Sonar</td></tr>
               <tr><td>雷撃士</td><td>Torpedo Officer</td></tr>
               <tr><td>航海長</td><td>Navigator</td></tr>
+              <tr><td>方位</td><td>Bearing</td></tr>
+              <tr><td>距離</td><td>Range</td></tr>
+              <tr><td>射程</td><td>Range</td></tr>
+              <tr><td>速力</td><td>Speed</td></tr>
+              <tr><td>深度</td><td>Depth</td></tr>
+              <tr><td>発射解</td><td>Firing Solution</td></tr>
+              <tr><td>TMA 解</td><td>Firing Solution</td></tr>
               <tr><td>急速潜航</td><td>Alarm Dive</td></tr>
               <tr><td>潜望鏡深度</td><td>Periscope Depth</td></tr>
               <tr><td>浮上双眼鏡</td><td>Surface Binoculars</td></tr>
@@ -393,6 +433,34 @@
               <tr><td>全速離脱</td><td>Full Speed Egress</td></tr>
             </table>
           </div>
+        </section>
+
+        <section class="section">
+          <h2>レイアウト対応とフォールバック</h2>
+          <div class="grid two">
+            <article class="card">
+              <h3>CSS 方針</h3>
+              <ul>
+                <li>ヘッダー帯は英語長文化を見越して折返し許可</li>
+                <li>右サイドのボタンは <code>font-size: clamp()</code> と <code>min-width</code> 再調整で対応</li>
+                <li>長い英語ラベルは短縮形も検討する</li>
+              </ul>
+            </article>
+            <article class="card">
+              <h3>辞書キー欠落時</h3>
+              <p>初期実装では <code>日本語へフォールバック</code> を採用する。キーそのものの表示はデバッグ時のみ許可する。</p>
+            </article>
+          </div>
+        </section>
+
+        <section class="section">
+          <h2>公開とリポジトリ前提</h2>
+          <ul>
+            <li>実装対象: <code>/Users/masatoueda/Documents/なんでも/SilentDepth/</code></li>
+            <li>このディレクトリは git 管理下にある</li>
+            <li>公開先: GitHub + Cloudflare Pages</li>
+            <li>公開確認URL: <code>https://silentdepth.pages.dev/</code></li>
+          </ul>
         </section>
 
         <section class="section">
