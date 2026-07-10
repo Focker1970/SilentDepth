@@ -4370,10 +4370,11 @@ function updateButtons() {
   }
 
   const periscopeUsable = isPeriscopeDepth(state.submarine) || state.viewMode === "periscope";
+  const binocularUsable = isFullySurfaced(state.submarine) || state.viewMode === "binocular";
   setButtonState(captainPeriscopeButton, "active", state.viewMode === "periscope");
   setButtonState(captainPeriscopeButton, "dim", !periscopeUsable);
   setButtonState(captainBinocularButton, "active", state.viewMode === "binocular");
-  setButtonState(captainBinocularButton, "dim", state.binocularAttackState === "blocked");
+  setButtonState(captainBinocularButton, "dim", !binocularUsable);
   setButtonState(captainAlarmButton, "active", state.alarmDive.active);
   const seqStage = state.torpedoSequence.stage;
   const torpedoSelectActive = seqStage === TORPEDO_SEQUENCE.idle;
@@ -4432,12 +4433,16 @@ function updateButtons() {
   setButtonState(opticsZoomZoomButton, "active", zoomLabel === "高倍率");
   if (captainBinocularButton) {
     captainBinocularButton.textContent =
-      state.binocularAttackState === "allowed"
+      !binocularUsable
+        ? "浮上双眼鏡"
+        : state.binocularAttackState === "allowed"
         ? "浮上双眼鏡"
         : state.binocularAttackState === "risky"
           ? "浮上双眼鏡 / 危険"
-          : "浮上双眼鏡 / 禁止";
-    captainBinocularButton.title = state.binocularAttackReason;
+          : "浮上双眼鏡 / 観測のみ";
+    captainBinocularButton.title = !binocularUsable
+      ? "双眼鏡は完全浮上で使用可能です。"
+      : state.binocularAttackReason;
   }
   if (surfaceAttackCardNode) {
     surfaceAttackCardNode.style.display =
