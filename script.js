@@ -1612,10 +1612,11 @@ function playDepthChargeExplosionAudio(depthCharge, success, horizontalRange, de
 
   const context = audioState.context;
   const now = context.currentTime;
-  const rangeFactor = clamp((280 - horizontalRange) / 280, 0.08, 1);
+  const rangeFactor = clamp((360 - horizontalRange) / 360, 0.04, 1);
+  const nearFactor = Math.pow(rangeFactor, 0.58);
   const depthFactor = clamp((120 - depthDelta) / 120, 0.15, 1);
   const hitFactor = success ? 1 : 0.72;
-  const energy = clamp(0.2 + rangeFactor * 0.55 + depthFactor * 0.15, 0.18, 1) * hitFactor;
+  const energy = clamp(0.16 + nearFactor * 0.82 + depthFactor * 0.12, 0.12, 1.18) * hitFactor;
 
   const panner = context.createStereoPanner();
   const relBearing = normalizeAngle(bearing(state.submarine, depthCharge) - state.submarine.heading);
@@ -1627,12 +1628,12 @@ function playDepthChargeExplosionAudio(depthCharge, success, horizontalRange, de
   const shockGain = context.createGain();
   const shockFilter = context.createBiquadFilter();
   shockOsc.type = "triangle";
-  shockOsc.frequency.setValueAtTime(118 + rangeFactor * 22, now);
+  shockOsc.frequency.setValueAtTime(118 + nearFactor * 22, now);
   shockOsc.frequency.exponentialRampToValueAtTime(52 + depthFactor * 8, now + 0.45);
   shockFilter.type = "lowpass";
-  shockFilter.frequency.setValueAtTime(220 + rangeFactor * 180, now);
+  shockFilter.frequency.setValueAtTime(220 + nearFactor * 180, now);
   shockGain.gain.setValueAtTime(0.0001, now);
-  shockGain.gain.exponentialRampToValueAtTime(0.12 * energy, now + 0.012);
+  shockGain.gain.exponentialRampToValueAtTime(0.18 * energy, now + 0.012);
   shockGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.58);
   shockOsc.connect(shockFilter);
   shockFilter.connect(shockGain);
@@ -1645,12 +1646,12 @@ function playDepthChargeExplosionAudio(depthCharge, success, horizontalRange, de
   const rumbleGain = context.createGain();
   const rumbleFilter = context.createBiquadFilter();
   rumbleOsc.type = "sine";
-  rumbleOsc.frequency.setValueAtTime(74 + rangeFactor * 12, now);
+  rumbleOsc.frequency.setValueAtTime(74 + nearFactor * 12, now);
   rumbleOsc.frequency.exponentialRampToValueAtTime(34 + depthFactor * 6, now + 1.4);
   rumbleFilter.type = "lowpass";
-  rumbleFilter.frequency.setValueAtTime(180 + rangeFactor * 140, now);
+  rumbleFilter.frequency.setValueAtTime(180 + nearFactor * 140, now);
   rumbleGain.gain.setValueAtTime(0.0001, now + 0.02);
-  rumbleGain.gain.exponentialRampToValueAtTime(0.16 * energy, now + 0.1);
+  rumbleGain.gain.exponentialRampToValueAtTime(0.22 * energy, now + 0.1);
   rumbleGain.gain.exponentialRampToValueAtTime(0.0001, now + 1.75);
   rumbleOsc.connect(rumbleFilter);
   rumbleFilter.connect(rumbleGain);
@@ -1673,12 +1674,12 @@ function playDepthChargeExplosionAudio(depthCharge, success, horizontalRange, de
   const noiseGain = context.createGain();
   noiseSource.buffer = noiseBuffer;
   noiseBandpass.type = "bandpass";
-  noiseBandpass.frequency.setValueAtTime(150 + rangeFactor * 110, now);
+  noiseBandpass.frequency.setValueAtTime(150 + nearFactor * 110, now);
   noiseBandpass.Q.value = 0.8;
   noiseLowpass.type = "lowpass";
-  noiseLowpass.frequency.setValueAtTime(320 + rangeFactor * 260, now);
+  noiseLowpass.frequency.setValueAtTime(320 + nearFactor * 260, now);
   noiseGain.gain.setValueAtTime(0.0001, now + 0.015);
-  noiseGain.gain.exponentialRampToValueAtTime(0.06 * energy, now + 0.08);
+  noiseGain.gain.exponentialRampToValueAtTime(0.1 * energy, now + 0.08);
   noiseGain.gain.exponentialRampToValueAtTime(0.0001, now + duration);
   noiseSource.connect(noiseBandpass);
   noiseBandpass.connect(noiseLowpass);
