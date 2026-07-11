@@ -218,6 +218,8 @@ const DEPTH_CHARGE_BASE_LETHAL_RADIUS = 28;
 const DEPTH_CHARGE_BASE_DAMAGE_RADIUS = 85;
 const DEPTH_CHARGE_JAM_BASE = 5.5;
 const DEPTH_CHARGE_JAM_NEAR = 9;
+const DEPTH_CHARGE_SHOCK_BASE = 1.2;
+const DEPTH_CHARGE_SHOCK_NEAR = 2.1;
 const ESCORT_REACQUIRE_LOCKOUT = 5.5;
 const UBOAT_CLASS = {
   name: "Type VII",
@@ -966,7 +968,9 @@ const state = {
   acousticJamming: {
     timer: 0,
     intensity: 0,
-    source: null
+    source: null,
+    shockTimer: 0,
+    shockIntensity: 0
   },
   advisorHints: [],
   contactAssessment: null,
@@ -1344,9 +1348,17 @@ function acousticJammingFactor() {
   return clamp(jam.intensity * clamp(jam.timer / DEPTH_CHARGE_JAM_BASE, 0.35, 1), 0, 1);
 }
 
-function triggerDepthChargeJamming(contact, success, range) {
+function acousticShockFactor() {
+  const jam = state.acousticJamming;
+  if (!jam || jam.shockTimer <= 0) return 0;
+  return clamp(jam.shockIntensity * clamp(jam.shockTimer / DEPTH_CHARGE_SHOCK_BASE, 0.25, 1), 0, 1);
+}
+
+function triggerDepthChargeJamming(contact, success, range, depthDelta = 0) {
+  const rangeFactor = clamp((260 - range) / 260, 0, 1);
+  const depthFactor = clamp((110 - depthDelta) / 110, 0, 1);
   const intensity = clamp(
-    (success ? 0.85 : 0.55) + clamp((260 - range) / 260, 0, 0.32),
+    (success ? 0.85 : 0.55) + rangeFactor * 0.32 + depthFactor * 0.08,
     0.35,
     1
   );
@@ -1356,6 +1368,14 @@ function triggerDepthChargeJamming(contact, success, range) {
   );
   state.acousticJamming.intensity = Math.max(state.acousticJamming.intensity, intensity);
   state.acousticJamming.source = contact?.id || null;
+  state.acousticJamming.shockTimer = Math.max(
+    state.acousticJamming.shockTimer,
+    success ? DEPTH_CHARGE_SHOCK_NEAR : DEPTH_CHARGE_SHOCK_BASE
+  );
+  state.acousticJamming.shockIntensity = Math.max(
+    state.acousticJamming.shockIntensity,
+    clamp((success ? 0.82 : 0.52) + rangeFactor * 0.28 + depthFactor * 0.12, 0.35, 1)
+  );
 }
 
 function toRadians(deg) {
@@ -1539,7 +1559,8 @@ function resolveDepthChargeDetonation(depthCharge) {
     damage = Math.max(0, Math.round(depthCharge.plannedDamage * 0.5 * proximityFactor));
   }
 
-  triggerDepthChargeJamming({ id: depthCharge.parentId }, damage > 0, horizontalRange);
+  triggerDepthChargeJamming({ id: depthCharge.parentId }, damage > 0, horizontalRange, depthDelta);
+  playDepthChargeExplosionAudio(depthCharge, damage > 0, horizontalRange, depthDelta);
 
   if (damage > 0) {
     sub.hull = clamp(sub.hull - damage, 0, 100);
@@ -1584,6 +1605,87 @@ async function loadSonarSampleBuffers(context) {
   });
 
   return audioState.sonarSamplesLoading;
+}
+
+function playDepthChargeExplosionAudio(depthCharge, success, horizontalRange, depthDelta) {
+  if (!audioState.context || !audioState.masterGain || !audioState.enabled) return;
+
+  const context = audioState.context;
+  const now = context.currentTime;
+  const rangeFactor = clamp((280 - horizontalRange) / 280, 0.08, 1);
+  const depthFactor = clamp((120 - depthDelta) / 120, 0.15, 1);
+  const hitFactor = success ? 1 : 0.72;
+  const energy = clamp(0.2 + rangeFactor * 0.55 + depthFactor * 0.15, 0.18, 1) * hitFactor;
+
+  const panner = context.createStereoPanner();
+  const relBearing = normalizeAngle(bearing(state.submarine, depthCharge) - state.submarine.heading);
+  panner.pan.value = clamp(Math.sin(toRadians(relBearing)) * rangeFactor * 0.6, -0.85, 0.85);
+  panner.connect(audioState.masterGain);
+
+  // Short shock front.
+  const shockOsc = context.createOscillator();
+  const shockGain = context.createGain();
+  const shockFilter = context.createBiquadFilter();
+  shockOsc.type = "triangle";
+  shockOsc.frequency.setValueAtTime(118 + rangeFactor * 22, now);
+  shockOsc.frequency.exponentialRampToValueAtTime(52 + depthFactor * 8, now + 0.45);
+  shockFilter.type = "lowpass";
+  shockFilter.frequency.setValueAtTime(220 + rangeFactor * 180, now);
+  shockGain.gain.setValueAtTime(0.0001, now);
+  shockGain.gain.exponentialRampToValueAtTime(0.12 * energy, now + 0.012);
+  shockGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.58);
+  shockOsc.connect(shockFilter);
+  shockFilter.connect(shockGain);
+  shockGain.connect(panner);
+  shockOsc.start(now);
+  shockOsc.stop(now + 0.62);
+
+  // Dense underwater rumble.
+  const rumbleOsc = context.createOscillator();
+  const rumbleGain = context.createGain();
+  const rumbleFilter = context.createBiquadFilter();
+  rumbleOsc.type = "sine";
+  rumbleOsc.frequency.setValueAtTime(74 + rangeFactor * 12, now);
+  rumbleOsc.frequency.exponentialRampToValueAtTime(34 + depthFactor * 6, now + 1.4);
+  rumbleFilter.type = "lowpass";
+  rumbleFilter.frequency.setValueAtTime(180 + rangeFactor * 140, now);
+  rumbleGain.gain.setValueAtTime(0.0001, now + 0.02);
+  rumbleGain.gain.exponentialRampToValueAtTime(0.16 * energy, now + 0.1);
+  rumbleGain.gain.exponentialRampToValueAtTime(0.0001, now + 1.75);
+  rumbleOsc.connect(rumbleFilter);
+  rumbleFilter.connect(rumbleGain);
+  rumbleGain.connect(panner);
+  rumbleOsc.start(now);
+  rumbleOsc.stop(now + 1.8);
+
+  // Bubble/noise tail so distant blasts feel muffled rather than tonal.
+  const duration = 1.6;
+  const noiseBuffer = context.createBuffer(1, Math.ceil(context.sampleRate * duration), context.sampleRate);
+  const channel = noiseBuffer.getChannelData(0);
+  for (let index = 0; index < channel.length; index += 1) {
+    const t = index / channel.length;
+    const envelope = Math.pow(1 - t, 2.2);
+    channel[index] = (Math.random() * 2 - 1) * envelope;
+  }
+  const noiseSource = context.createBufferSource();
+  const noiseBandpass = context.createBiquadFilter();
+  const noiseLowpass = context.createBiquadFilter();
+  const noiseGain = context.createGain();
+  noiseSource.buffer = noiseBuffer;
+  noiseBandpass.type = "bandpass";
+  noiseBandpass.frequency.setValueAtTime(150 + rangeFactor * 110, now);
+  noiseBandpass.Q.value = 0.8;
+  noiseLowpass.type = "lowpass";
+  noiseLowpass.frequency.setValueAtTime(320 + rangeFactor * 260, now);
+  noiseGain.gain.setValueAtTime(0.0001, now + 0.015);
+  noiseGain.gain.exponentialRampToValueAtTime(0.06 * energy, now + 0.08);
+  noiseGain.gain.exponentialRampToValueAtTime(0.0001, now + duration);
+  noiseSource.connect(noiseBandpass);
+  noiseBandpass.connect(noiseLowpass);
+  noiseLowpass.connect(noiseGain);
+  noiseGain.connect(panner);
+  noiseSource.start(now);
+  noiseSource.stop(now + duration);
 }
 
 function disposeContactAudioNode(node) {
@@ -6432,6 +6534,12 @@ function updateSubmarine(deltaTime) {
       state.acousticJamming.source = null;
     }
   }
+  if (state.acousticJamming.shockTimer > 0) {
+    state.acousticJamming.shockTimer = Math.max(0, state.acousticJamming.shockTimer - deltaTime);
+    if (state.acousticJamming.shockTimer === 0) {
+      state.acousticJamming.shockIntensity = 0;
+    }
+  }
 
   if (surfaced && !prevSurfaced) {
     emitGermanRepeater("engineDiesel");
@@ -6940,6 +7048,8 @@ function syncAudioGraph() {
 
   const activeIds = new Set();
   const now = audioState.context.currentTime;
+  const jam = acousticJammingFactor();
+  const shock = acousticShockFactor();
 
   for (const entry of state.sonarContacts.slice(0, 5)) {
     const { contact, strength, relBearing } = entry;
@@ -6957,14 +7067,15 @@ function syncAudioGraph() {
     const pan = clamp(Math.sin(toRadians(relBearing)), -1, 1);
     const typeGain =
       contact.type === "escort" ? 0.22 : contact.type === "flagship" ? 0.28 : 0.24;
-    const gainValue = audioState.enabled ? strength * typeGain : 0;
+    const maskingFactor = clamp(1 - jam * 0.42 - shock * 0.88, 0.03, 1);
+    const gainValue = audioState.enabled ? strength * typeGain * maskingFactor : 0;
     const frequency = contact.tone + contact.speed * 8 + strength * 14;
     const filterFrequency =
       contact.type === "escort"
-        ? 1120 + contact.speed * 40 + strength * 120
+        ? 1120 + contact.speed * 40 + strength * 120 - shock * 340
         : contact.type === "flagship"
-          ? 220 + contact.speed * 16 + strength * 35
-          : 360 + contact.speed * 22 + strength * 45;
+          ? 220 + contact.speed * 16 + strength * 35 - shock * 90
+          : 360 + contact.speed * 22 + strength * 45 - shock * 140;
 
     node.panner.pan.cancelScheduledValues(now);
     node.panner.pan.linearRampToValueAtTime(pan, now + 0.1);
@@ -6981,7 +7092,8 @@ function syncAudioGraph() {
     node.gain.gain.setTargetAtTime(0, now, 0.08);
   }
 
-  audioState.noiseGain.gain.setTargetAtTime(audioState.enabled ? 0.018 : 0, now, 0.12);
+  const noiseFloor = 0.018 + jam * 0.01 + shock * 0.055;
+  audioState.noiseGain.gain.setTargetAtTime(audioState.enabled ? noiseFloor : 0, now, 0.12);
 }
 
 async function toggleAudio() {
