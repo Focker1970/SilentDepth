@@ -888,6 +888,7 @@ const state = {
     aob: 90,
     gyroAngle: null,
     absoluteFireBearing: null,
+    maxEffectiveRange: null,
     valid: false,
     suggestedSpeedKt: null,
     suggestedAob: null,
@@ -3695,6 +3696,23 @@ function seedContacts() {
   state.contacts = currentStage().setup().contacts;
 }
 
+function computeAimingGeometry(contact, torpedo = getActiveTorpedoSpec()) {
+  const relativeFromTargetBow = Math.abs(
+    normalizeAngle(bearing(contact, state.submarine) - contact.heading)
+  );
+  const bearingAngle = Math.min(relativeFromTargetBow, 180 - relativeFromTargetBow);
+  const sinBearing = Math.abs(Math.sin(toRadians(bearingAngle)));
+  const speedRatio = clamp(contact.speed / Math.max(1, torpedo.speedKt), 0, 0.98);
+  const effectiveRatio = Math.sqrt(Math.max(0.05, 1 - speedRatio * speedRatio * sinBearing * sinBearing));
+  return {
+    bearingAngle,
+    aftShot: relativeFromTargetBow > 90,
+    effectiveRatio,
+    maxEffectiveRange: torpedo.maxRange * effectiveRatio,
+    practicalEffectiveRange: torpedo.practicalRange * effectiveRatio
+  };
+}
+
 function computeTorpedoSolution(contact) {
   const sub = state.submarine;
   const nav = state.navigationTactical;
@@ -3740,6 +3758,8 @@ function computeTorpedoSolution(contact) {
   const range = distance(sub, contact);
   const interceptRange = distance(sub, { x: interceptX, y: interceptY });
   const aspect = normalizeAngle(contact.heading - (bearing(contact, sub) + 180));
+  const geometry = computeAimingGeometry(contact, torpedo);
+  const effectiveRangeLimit = geometry.maxEffectiveRange * (0.82 + nav.solutionRating * 0.18);
 
   return {
     contact,
@@ -3755,9 +3775,14 @@ function computeTorpedoSolution(contact) {
     torpedoSpeedKt: torpedo.speedKt,
     practicalRange: torpedo.practicalRange,
     maxRange: torpedo.maxRange,
+    maxEffectiveRange: geometry.maxEffectiveRange,
+    practicalEffectiveRange: geometry.practicalEffectiveRange,
+    bearingAngle: geometry.bearingAngle,
+    aftShot: geometry.aftShot,
     solutionRating: nav.solutionRating,
     effectiveGyroLimit: TORPEDO_GYRO_LIMIT - (1 - nav.solutionRating) * 12,
     shotValid:
+      range <= effectiveRangeLimit &&
       interceptRange <= torpedo.maxRange * (0.82 + nav.solutionRating * 0.18) &&
       Math.abs(gyroAngle) <= TORPEDO_GYRO_LIMIT - (1 - nav.solutionRating) * 12 &&
       sub.depth >= UBOAT_CLASS.torpedoDepthMin &&
@@ -4770,12 +4795,15 @@ function selectedTorpedoFireStatus() {
 
   if (!selectedShot.shotValid) {
     const beyondRange = selectedShot.interceptRange > torpedo.maxRange;
+    const beyondEffectiveRange = selectedShot.range > selectedShot.maxEffectiveRange;
     return {
       ready: false,
       label: "射点未成立",
       detail: beyondRange
         ? `${torpedo.label} 最大射程 ${torpedo.maxRange}m 外。さらに接敵が必要。`
-        : "進角または射程が不適。さらに接敵して解を整える。"
+        : beyondEffectiveRange
+          ? `目標速力 ${selectedShot.contact.speed.toFixed(1)}kt / 方位角 ${Math.round(selectedShot.bearingAngle)}° に対する最大有効照準距離 ${Math.round(selectedShot.maxEffectiveRange)}m 外。さらに肉薄が必要。`
+          : "進角または射程が不適。さらに接敵して解を整える。"
     };
   }
 
@@ -4794,7 +4822,8 @@ function selectedTorpedoFireStatus() {
       `${contactLabel(selectedShot.contact)} へ発射可能。` +
       (selectedShot.range > torpedo.practicalRange
         ? ` ただし ${torpedo.label} 実用射程 ${torpedo.practicalRange}m 超過。`
-        : ` ${torpedo.label} ${torpedo.speedKt}kt。`)
+        : ` ${torpedo.label} ${torpedo.speedKt}kt。`) +
+      (selectedShot.aftShot ? " 後方射点のため誤差猶予が小さい。" : "")
   };
 }
 
@@ -5453,9 +5482,9 @@ function updateHud() {
   if (bestShot) {
     torpedoSolutionNode.textContent = `${torpedoSpec.label} ${torpedoSpec.speedKt}kt / ${playerContactLabel(bestShot.contact)} 距離 ${Math.round(
       bestShot.range
-    )}m / 実用${torpedoSpec.practicalRange}m / 進角 ${formatSigned(bestShot.gyroAngle)}° / AOB ${formatSigned(
+    )}m / 有効${Math.round(bestShot.maxEffectiveRange)}m / 実用${torpedoSpec.practicalRange}m / 進角 ${formatSigned(bestShot.gyroAngle)}° / AOB ${formatSigned(
       bestShot.aspect
-    )}° / 会敵 ${bestShot.interceptTime.toFixed(1)}秒 / 解精度 ${Math.round(
+    )}° / 方位角 ${Math.round(bestShot.bearingAngle)}°${bestShot.aftShot ? " / 後方射点" : ""} / 会敵 ${bestShot.interceptTime.toFixed(1)}秒 / 解精度 ${Math.round(
       bestShot.solutionRating * 100
     )}%。${
       bestShot.shotValid ? "解あり、発射可能。" : "まだ解が悪い。"
@@ -5490,7 +5519,9 @@ function updateHud() {
             ? "発射済み"
               : "命中判定";
   if (torpedoSelectedModeNode) {
-    torpedoSelectedModeNode.textContent = `${torpedoSpec.label} / ${torpedoSpec.speedKt}kt / 実用${torpedoSpec.practicalRange}m`;
+    torpedoSelectedModeNode.textContent = bestShot
+      ? `${torpedoSpec.label} / ${torpedoSpec.speedKt}kt / 有効${Math.round(bestShot.maxEffectiveRange)}m / 実用${torpedoSpec.practicalRange}m`
+      : `${torpedoSpec.label} / ${torpedoSpec.speedKt}kt / 実用${torpedoSpec.practicalRange}m`;
   }
   torpedoSelectedTargetNode.textContent = selectedShot
     ? contactLabel(selectedShot.contact)
@@ -5555,10 +5586,16 @@ function updateHud() {
     : bestShot
       ? `報告: ${torpedoSpec.label} で ${playerContactLabel(bestShot.contact)} に対し進角 ${formatSigned(
           bestShot.gyroAngle
-        )}°、AOB ${formatSigned(bestShot.aspect)}°、解精度 ${Math.round(
+        )}°、AOB ${formatSigned(bestShot.aspect)}°、方位角 ${Math.round(bestShot.bearingAngle)}°、最大有効照準距離 ${Math.round(bestShot.maxEffectiveRange)}m、解精度 ${Math.round(
           bestShot.solutionRating * 100
         )}%。${
-          bestShot.shotValid ? "雷撃準備可。" : "なお射点修正を要す。"
+          bestShot.shotValid
+            ? bestShot.aftShot
+              ? "雷撃準備可。ただし後方射点で誤差に弱い。"
+              : "雷撃準備可。"
+            : bestShot.range > bestShot.maxEffectiveRange
+              ? "有効照準距離外。さらに接近が必要。"
+              : "なお射点修正を要す。"
         }`
       : "報告: 射撃解なし。目標諸元待ち。";
   torpedoDutyNode.textContent =
@@ -5745,6 +5782,7 @@ function resetGame() {
     aob: 90,
     gyroAngle: null,
     absoluteFireBearing: null,
+    maxEffectiveRange: null,
     valid: false,
     suggestedSpeedKt: null,
     suggestedAob: null,
@@ -6756,12 +6794,18 @@ function computeTorpedoHitChance(solution, usesTDC) {
   const sub = state.submarine;
   const torpedo = getActiveTorpedoSpec();
   const rangeFactor = clamp(1 - solution.range / (torpedo.maxRange * 1.08), 0.14, 1);
+  const effectiveRangeFactor = clamp(
+    1 - Math.max(0, solution.range - solution.maxEffectiveRange) / Math.max(140, solution.maxEffectiveRange * 0.5),
+    0.18,
+    1
+  );
   const practicalOverflow = Math.max(0, solution.range - torpedo.practicalRange);
   const practicalSpan = Math.max(1, torpedo.maxRange - torpedo.practicalRange);
   const practicalRangeFactor =
     practicalOverflow <= 0
       ? 1
       : clamp(1 - practicalOverflow / practicalSpan, 0.32, 0.9);
+  const aftShotFactor = solution.aftShot ? 0.84 : 1;
   const gyroFactor = clamp(
     1 - Math.abs(solution.gyroAngle) / Math.max(1, solution.effectiveGyroLimit),
     0.35,
@@ -6777,7 +6821,9 @@ function computeTorpedoHitChance(solution, usesTDC) {
   const baseChance = clamp(
     solution.solutionRating *
       rangeFactor *
+      effectiveRangeFactor *
       practicalRangeFactor *
+      aftShotFactor *
       gyroFactor *
       torpedoSpeedFactor *
       sourceFactor *
@@ -6800,6 +6846,7 @@ function computeTorpedoHitChance(solution, usesTDC) {
           : 0;
   const tdcBonus = usesTDC && solution.shotValid ? 0.12 : 0;
   const visualBonus = solution.contact.visualDetected ? 0.05 : 0;
+  const forwardShotBonus = !solution.aftShot && solution.range <= solution.practicalEffectiveRange ? 0.03 : 0;
   const stableShotFloor =
     usesTDC && solution.shotValid && solution.range <= Math.min(1000, torpedo.practicalRange)
       ? state.difficulty === "historical"
@@ -6809,7 +6856,7 @@ function computeTorpedoHitChance(solution, usesTDC) {
         ? 0.22
         : 0.28;
   return clamp(
-    Math.max(stableShotFloor, baseChance + closeRangeBonus + tdcBonus + visualBonus),
+    Math.max(stableShotFloor, baseChance + closeRangeBonus + tdcBonus + visualBonus + forwardShotBonus),
     state.difficulty === "historical" ? 0.22 : 0.28,
     0.98
   );
@@ -8460,6 +8507,7 @@ function computeTDCSolution() {
   if (tdc.bearing === null || tdc.speedKt === null || tdc.aob === null) {
     tdc.gyroAngle = null;
     tdc.absoluteFireBearing = null;
+    tdc.maxEffectiveRange = null;
     tdc.valid = false;
     return;
   }
@@ -8467,17 +8515,21 @@ function computeTDCSolution() {
   if (Math.abs(sinLead) > 1) {
     tdc.gyroAngle = null;
     tdc.absoluteFireBearing = null;
+    tdc.maxEffectiveRange = null;
     tdc.valid = false;
     return;
   }
   const leadAngle = (Math.asin(sinLead) * 180) / Math.PI;
   const absoluteFireBearing = tdc.bearing + leadAngle;
   const gyroAngle = normalizeAngle(absoluteFireBearing - state.submarine.heading);
+  const effectiveRatio = Math.sqrt(Math.max(0.05, 1 - sinLead * sinLead));
+  const maxEffectiveRange = torpedo.maxRange * effectiveRatio;
   tdc.gyroAngle = gyroAngle;
   tdc.absoluteFireBearing = absoluteFireBearing;
+  tdc.maxEffectiveRange = maxEffectiveRange;
   tdc.valid =
     Math.abs(gyroAngle) <= TORPEDO_GYRO_LIMIT &&
-    (tdc.range === null || tdc.range <= torpedo.maxRange);
+    (tdc.range === null || (tdc.range <= torpedo.maxRange && tdc.range <= maxEffectiveRange));
 }
 
 function applySuggestedSpeed() {
@@ -8643,11 +8695,17 @@ function updateTDCDisplay() {
       tdc.suggestedAob !== null ? formatSigned(Math.round(tdc.suggestedAob)) : "---";
   }
   if (tdcEstimateNoteNode) {
-    tdcEstimateNoteNode.textContent = `${torpedo.label} ${torpedo.speedKt}kt / 実用${torpedo.practicalRange}m。 ${tdc.estimateNote}`;
+    tdcEstimateNoteNode.textContent = `${torpedo.label} ${torpedo.speedKt}kt / 実用${torpedo.practicalRange}m${
+      tdc.maxEffectiveRange !== null ? ` / 有効${Math.round(tdc.maxEffectiveRange)}m` : ""
+    }。 ${tdc.estimateNote}`;
   }
   if (tdcGyroNode) tdcGyroNode.textContent = tdc.gyroAngle !== null ? formatSigned(Math.round(tdc.gyroAngle)) : "---";
   if (tdcValidNode) {
-    tdcValidNode.textContent = tdc.valid ? "発射可" : tdc.gyroAngle !== null ? "範囲外" : "---";
+    const rangeInvalid =
+      tdc.range !== null &&
+      tdc.maxEffectiveRange !== null &&
+      (tdc.range > tdc.maxEffectiveRange || tdc.range > torpedo.maxRange);
+    tdcValidNode.textContent = tdc.valid ? "発射可" : rangeInvalid ? "有効外" : tdc.gyroAngle !== null ? "範囲外" : "---";
     tdcValidNode.style.color = tdc.valid ? "#9bd9a5" : tdc.gyroAngle !== null ? "#ff8771" : "#a5c1cd";
   }
 }
