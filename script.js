@@ -3713,6 +3713,115 @@ function computeAimingGeometry(contact, torpedo = getActiveTorpedoSpec()) {
   };
 }
 
+function effectiveRangeForBearing(targetSpeedKt, bearingAngle, torpedo = getActiveTorpedoSpec()) {
+  const sinBearing = Math.abs(Math.sin(toRadians(bearingAngle)));
+  const speedRatio = clamp(targetSpeedKt / Math.max(1, torpedo.speedKt), 0, 0.98);
+  return torpedo.maxRange * Math.sqrt(Math.max(0.05, 1 - speedRatio * speedRatio * sinBearing * sinBearing));
+}
+
+function evaluateNavigationShotPoint(contact, estimatedTargetHeading, estimatedTargetSpeed, rangeToTarget) {
+  const sub = state.submarine;
+  const torpedo = getActiveTorpedoSpec();
+  const desiredAngles =
+    state.commandIntent === "periscope"
+      ? [72, 80, 88]
+      : state.commandIntent === "evade"
+        ? [60, 68]
+        : [65, 75, 85];
+  const sides = [-1, 1];
+  const candidates = [];
+
+  for (let eta = 150; eta <= 420; eta += 30) {
+    const targetFuture = {
+      x: clamp(
+        contact.x + Math.cos(toRadians(estimatedTargetHeading)) * knotsToWorldSpeed(estimatedTargetSpeed) * eta,
+        0,
+        WORLD.width
+      ),
+      y: clamp(
+        contact.y + Math.sin(toRadians(estimatedTargetHeading)) * knotsToWorldSpeed(estimatedTargetSpeed) * eta,
+        0,
+        WORLD.height
+      )
+    };
+
+    for (const desiredBearingAngle of desiredAngles) {
+      const maxEffectiveRange = effectiveRangeForBearing(estimatedTargetSpeed, desiredBearingAngle, torpedo);
+      const preferredRange =
+        state.commandIntent === "periscope"
+          ? clamp(maxEffectiveRange * 0.58, 650, 1250)
+          : clamp(maxEffectiveRange * 0.66, 800, 1600);
+
+      for (const side of sides) {
+        const shotBearing = normalizeAngle(estimatedTargetHeading + side * desiredBearingAngle);
+        const waypoint = {
+          x: clamp(
+            targetFuture.x + Math.cos(toRadians(shotBearing)) * preferredRange,
+            0,
+            WORLD.width
+          ),
+          y: clamp(
+            targetFuture.y + Math.sin(toRadians(shotBearing)) * preferredRange,
+            0,
+            WORLD.height
+          )
+        };
+        const ownDistance = distance(sub, waypoint);
+        const requiredSpeed = ownDistance / Math.max(eta, 1) / WORLD_METERS_PER_SECOND_PER_KNOT;
+        const headingToWaypoint = bearing(sub, waypoint);
+        const headingShift = Math.abs(normalizeAngle(headingToWaypoint - sub.heading));
+        const sidePenalty = Math.abs(side) * 0;
+        const escortRisk = state.contacts
+          .filter((entry) => entry.hostile && !entry.destroyed)
+          .reduce((maxRisk, escort) => {
+            const escortDistance = distance(escort, waypoint);
+            const risk = clamp((1600 - escortDistance) / 1600, 0, 1);
+            return Math.max(maxRisk, risk);
+          }, 0);
+        const speedFeasible = clamp(1 - Math.max(0, requiredSpeed - 5.2) / 2.2, 0, 1);
+        const angleQuality = clamp(1 - Math.abs(desiredBearingAngle - 78) / 28, 0.2, 1);
+        const forwardBias = desiredBearingAngle < 90 ? 1 : 0.86;
+        const rangeMargin = clamp((maxEffectiveRange - preferredRange) / Math.max(500, maxEffectiveRange), 0.05, 1);
+        const distanceBias = clamp(1 - Math.max(0, preferredRange - torpedo.practicalRange) / Math.max(400, torpedo.maxRange), 0.2, 1);
+        const turnPenalty = clamp(headingShift / 180, 0, 1);
+        const score =
+          angleQuality * 0.27 +
+          speedFeasible * 0.24 +
+          rangeMargin * 0.18 +
+          distanceBias * 0.12 +
+          forwardBias * 0.11 +
+          (1 - escortRisk) * 0.08 -
+          turnPenalty * 0.08 -
+          sidePenalty;
+
+        candidates.push({
+          contact,
+          waypoint,
+          targetFuture,
+          eta,
+          desiredBearingAngle,
+          shotBearing,
+          shotRange: preferredRange,
+          maxEffectiveRange,
+          requiredSpeed,
+          recommendedHeading: headingToWaypoint,
+          headingShift,
+          escortRisk,
+          score,
+          status:
+            score >= 0.74
+              ? "良"
+              : score >= 0.56
+                ? "可"
+                : "苦"
+        });
+      }
+    }
+  }
+
+  return candidates.sort((a, b) => b.score - a.score)[0] || null;
+}
+
 function computeTorpedoSolution(contact) {
   const sub = state.submarine;
   const nav = state.navigationTactical;
@@ -4105,13 +4214,23 @@ function navigationInterceptAdvice() {
   const estimatedTargetHeading = observed?.estimatedHeading ?? ((Math.round(focusContact.heading / 10) * 10) % 360 + 360) % 360;
   const estimatedTargetSpeed = observed?.estimatedSpeed ?? Math.max(2, Math.round(focusContact.speed * 2) / 2);
   const rangeToTarget = observed?.lastRange ?? distance(sub, focusContact);
-  const interceptOffset =
+  const shotPlan = evaluateNavigationShotPoint(
+    focusContact,
+    estimatedTargetHeading,
+    estimatedTargetSpeed,
+    rangeToTarget
+  );
+  const fallbackOffset =
     state.commandIntent === "evade"
       ? 150
       : state.commandIntent === "periscope"
         ? 35
         : 55;
-  const projectedSeconds = clamp(rangeToTarget / Math.max(1.2, estimatedTargetSpeed * WORLD_METERS_PER_SECOND_PER_KNOT) * 0.55, 120, 420);
+  const projectedSeconds = clamp(
+    rangeToTarget / Math.max(1.2, estimatedTargetSpeed * WORLD_METERS_PER_SECOND_PER_KNOT) * 0.55,
+    120,
+    420
+  );
   const targetProjected = {
     x: clamp(
       focusContact.x + Math.cos(toRadians(estimatedTargetHeading)) * knotsToWorldSpeed(estimatedTargetSpeed) * projectedSeconds,
@@ -4124,28 +4243,36 @@ function navigationInterceptAdvice() {
       WORLD.height
     )
   };
-  const waypointRadius =
+  const fallbackRadius =
     state.commandIntent === "evade"
       ? clamp(rangeToTarget * 0.18, 260, 540)
       : state.commandIntent === "periscope"
         ? clamp(rangeToTarget * 0.2, 280, 620)
         : clamp(rangeToTarget * 0.24, 340, 760);
-  const waypointBearing = normalizeAngle(estimatedTargetHeading - interceptOffset);
-  const waypoint = {
+  const fallbackBearing = normalizeAngle(estimatedTargetHeading - fallbackOffset);
+  const fallbackWaypoint = {
     x: clamp(
-      targetProjected.x + Math.cos(toRadians(waypointBearing)) * waypointRadius,
+      targetProjected.x + Math.cos(toRadians(fallbackBearing)) * fallbackRadius,
       0,
       WORLD.width
     ),
     y: clamp(
-      targetProjected.y + Math.sin(toRadians(waypointBearing)) * waypointRadius,
+      targetProjected.y + Math.sin(toRadians(fallbackBearing)) * fallbackRadius,
       0,
       WORLD.height
     )
   };
-  const recommendedHeading = bearing(sub, waypoint);
-  const recommendedSpeed =
-    state.commandIntent === "evade"
+  const waypoint = shotPlan?.waypoint || fallbackWaypoint;
+  const recommendedHeading = shotPlan?.recommendedHeading ?? bearing(sub, waypoint);
+  const recommendedSpeed = shotPlan
+    ? clamp(
+        state.commandIntent === "evade"
+          ? Math.max(3, Math.min(5.5, shotPlan.requiredSpeed))
+          : Math.max(2, Math.min(5.5, shotPlan.requiredSpeed)),
+        2,
+        5.5
+      )
+    : state.commandIntent === "evade"
       ? 3
       : state.contactTactical.precision < 0.4
         ? 2
@@ -4157,9 +4284,16 @@ function navigationInterceptAdvice() {
     heading: recommendedHeading,
     speed: recommendedSpeed,
     waypoint,
-    note: `航海長具申: 針路 ${formatHeading(recommendedHeading)}、速力 ${recommendedSpeed.toFixed(1)}kt で進出。敵推定 針路 ${formatHeading(
-      estimatedTargetHeading
-    )} / 速力 ${estimatedTargetSpeed.toFixed(1)}kt。目標進出点 ${Math.round(waypointRadius)}m 先。`
+    shotPlan,
+    note: shotPlan
+      ? `航海長具申: 針路 ${formatHeading(recommendedHeading)}、速力 ${recommendedSpeed.toFixed(1)}kt で推奨射点へ進出。敵推定 針路 ${formatHeading(
+          estimatedTargetHeading
+        )} / 速力 ${estimatedTargetSpeed.toFixed(1)}kt。射点 ETA ${shotPlan.eta}s / 方位角 ${Math.round(
+          shotPlan.desiredBearingAngle
+        )}° / 射距離 ${Math.round(shotPlan.shotRange)}m / 評価 ${shotPlan.status}。`
+      : `航海長具申: 針路 ${formatHeading(recommendedHeading)}、速力 ${recommendedSpeed.toFixed(1)}kt で進出。敵推定 針路 ${formatHeading(
+          estimatedTargetHeading
+        )} / 速力 ${estimatedTargetSpeed.toFixed(1)}kt。目標進出点 ${Math.round(fallbackRadius)}m 先。`
   };
 }
 
@@ -4185,6 +4319,7 @@ function buildNavigationAdvisor() {
       speed: null,
       depth: recommendedDepth,
       waypoint: null,
+      shotPlan: null,
       status: "待機"
     };
   }
@@ -4192,11 +4327,16 @@ function buildNavigationAdvisor() {
   let status = "接敵整理";
   let intent = "前方へ回り込み、射点形成を優先。";
   let hint = "航海長提案の針路に合わせ、接近効率を上げる。";
+  const shotPlan = advice.shotPlan;
 
   if (state.commandIntent === "evade" || state.battlePhase === BATTLE_PHASES.egress) {
     status = "離脱優先";
     intent = "護衛との離隔を広げ、離脱針路を優先。";
     hint = "速力を抑えつつ深度を取り、離脱海域へ向けて針路維持。";
+  } else if (shotPlan && shotPlan.score >= 0.74) {
+    status = "最適射点";
+    intent = "推奨射点へ入り、観測から雷撃へ接続。";
+    hint = "航海長の射点誘導に合わせ、余計な回頭を避けて射点維持。";
   } else if (state.commandIntent === "periscope" || tactical.firingLane >= 0.66) {
     status = "射点形成中";
     intent = "観測位置を保ち、潜望鏡安定を優先。";
@@ -4218,13 +4358,18 @@ function buildNavigationAdvisor() {
     )}kt / 深度 ${recommendedDepth}m。${advice.note}`,
     captainNote: `航海長具申: ${status}。針路 ${formatHeading(advice.heading)}、速力 ${advice.speed.toFixed(
       1
-    )}kt、深度 ${recommendedDepth}m。`,
+    )}kt、深度 ${recommendedDepth}m。${
+      shotPlan
+        ? ` 射点 ETA ${shotPlan.eta}s / 評価 ${shotPlan.status}。`
+        : ""
+    }`,
     intent,
     hint,
     heading: advice.heading,
     speed: advice.speed,
     depth: recommendedDepth,
     waypoint: advice.waypoint,
+    shotPlan,
     status
   };
 }
@@ -5634,13 +5779,14 @@ function updateHud() {
       : flagshipAlive
       ? `重要輸送船まで推定 ${Math.round(distance(sub, flagship))}m。現在針路から ${Math.round(
           normalizeAngle(bearing(sub, flagship) - sub.heading)
-        )} 度。接近効率 ${Math.round(nav.approachRating * 100)}% / 回り込み ${Math.round(
+        )} 度。${navigationAdvisor.shotPlan ? `推奨射点 ${navigationAdvisor.shotPlan.status} / ETA ${navigationAdvisor.shotPlan.eta}s。` : ""} 接近効率 ${Math.round(nav.approachRating * 100)}% / 回り込み ${Math.round(
           tactical.positioning * 100
         )}% / 射点形成 ${Math.round(tactical.firingLane * 100)}%。`
       : `離脱海域まで ${Math.round(distance(sub, state.escapeZone))}m。現在針路から ${Math.round(
           escapeBearing
         )} 度。`;
   }
+  const navShotPlan = navigationAdvisor.shotPlan;
   navigationReportDetailNode.textContent = stage.id === "training_shot" && trainingTarget
     ? `報告: 現在針路 ${Math.round(sub.heading)} 度、訓練商船へ接近中。針路誤差 ${Math.round(
         nav.headingError
@@ -5648,9 +5794,13 @@ function updateHud() {
         nav.periscopeStable ? "良" : "不十分"
       }。`
     : flagshipAlive
-    ? `${navigationAdvisor.detail} 針路誤差 ${Math.round(nav.headingError)}° / 深度誤差 ${Math.round(
-        nav.depthError
-      )}m / 回り込み ${Math.round(tactical.positioning * 100)}% / 射点形成 ${Math.round(
+    ? `${navigationAdvisor.detail}${
+        navShotPlan
+          ? ` 推奨射点 ETA ${navShotPlan.eta}s / 射距離 ${Math.round(navShotPlan.shotRange)}m / 方位角 ${Math.round(
+              navShotPlan.desiredBearingAngle
+            )}° / 所要 ${navShotPlan.requiredSpeed.toFixed(1)}kt / 脅威 ${Math.round(navShotPlan.escortRisk * 100)}%。`
+          : ""
+      } 針路誤差 ${Math.round(nav.headingError)}° / 深度誤差 ${Math.round(nav.depthError)}m / 回り込み ${Math.round(tactical.positioning * 100)}% / 射点形成 ${Math.round(
         tactical.firingLane * 100
       )}%。`
     : `報告: 離脱針路を維持。海域端まで ${Math.round(distance(sub, state.escapeZone))}m。`;
@@ -7980,6 +8130,10 @@ function drawNavigationMainPlot() {
     rangeSeeds.push(Math.abs(prediction.targetEnd.y - state.submarine.y) / 0.38);
     rangeSeeds.push(Math.abs(prediction.ownEnd.x - state.submarine.x) / 0.42);
     rangeSeeds.push(Math.abs(prediction.ownEnd.y - state.submarine.y) / 0.38);
+    if (prediction.shotPoint) {
+      rangeSeeds.push(Math.abs(prediction.shotPoint.x - state.submarine.x) / 0.42);
+      rangeSeeds.push(Math.abs(prediction.shotPoint.y - state.submarine.y) / 0.38);
+    }
     if (prediction.interceptPoint) {
       rangeSeeds.push(Math.abs(prediction.interceptPoint.x - state.submarine.x) / 0.42);
       rangeSeeds.push(Math.abs(prediction.interceptPoint.y - state.submarine.y) / 0.38);
@@ -8117,6 +8271,24 @@ function drawNavigationMainPlot() {
       ownEnd.y + 18
     );
 
+    if (prediction.shotPoint) {
+      const shotPoint = navPoint(prediction.shotPoint.x, prediction.shotPoint.y);
+      ctx.strokeStyle = "#7ce8a6";
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.moveTo(shotPoint.x - 12, shotPoint.y - 12);
+      ctx.lineTo(shotPoint.x + 12, shotPoint.y + 12);
+      ctx.moveTo(shotPoint.x + 12, shotPoint.y - 12);
+      ctx.lineTo(shotPoint.x - 12, shotPoint.y + 12);
+      ctx.stroke();
+      ctx.fillStyle = "#d9ffe6";
+      ctx.fillText(
+        `推奨射点 ${prediction.shotPlan?.status || ""} / ETA ${prediction.shotPlan?.eta ?? "--"}s`,
+        shotPoint.x + 14,
+        shotPoint.y + 18
+      );
+    }
+
     if (prediction.interceptPoint) {
       const hit = navPoint(prediction.interceptPoint.x, prediction.interceptPoint.y);
       ctx.strokeStyle = "#ff8b78";
@@ -8147,7 +8319,11 @@ function drawNavigationMainPlot() {
   ctx.fillStyle = "#a5c1cd";
   ctx.fillText(
     advice.heading !== null
-      ? `具申 針路 ${formatHeading(advice.heading)} / 速力 ${advice.speed.toFixed(1)}kt`
+      ? `具申 針路 ${formatHeading(advice.heading)} / 速力 ${advice.speed.toFixed(1)}kt${
+          advice.shotPlan
+            ? ` / 射点 ${advice.shotPlan.status} / 方位角 ${Math.round(advice.shotPlan.desiredBearingAngle)}°`
+            : ""
+        }`
       : "有効接触なし",
     32,
     112
@@ -8238,6 +8414,8 @@ function navigationPlotPrediction() {
     ownHeading,
     ownSpeed,
     ownEnd,
+    shotPoint: advice.shotPlan?.waypoint || null,
+    shotPlan: advice.shotPlan || null,
     interceptPoint: preview?.interceptPoint || null
   };
 }
