@@ -23,6 +23,8 @@ const hudTriggerNode = document.getElementById("hud-trigger");
 const hudTriggerNoteNode = document.getElementById("hud-trigger-note");
 const hudObjectiveNode = document.getElementById("hud-objective");
 const hudObjectiveNoteNode = document.getElementById("hud-objective-note");
+const hudBattleStationsNode = document.getElementById("hud-battle-stations");
+const hudBattleStationsNoteNode = document.getElementById("hud-battle-stations-note");
 const hudTorpedoStatusNode = document.getElementById("hud-torpedo-status");
 const hudTorpedoNoteNode = document.getElementById("hud-torpedo-note");
 const hudAcousticModeNode = document.getElementById("hud-acoustic-mode");
@@ -928,6 +930,10 @@ const state = {
   gridParallax: {
     x: 0,
     y: 0
+  },
+  battleStations: {
+    active: false,
+    mode: "none"
   },
   commandIntent: "approach",
   campaign: createCampaignState(),
@@ -2491,6 +2497,15 @@ function setCommandState(nextState) {
   };
 }
 
+function setBattleStations(mode = "none") {
+  state.battleStations.active = mode === "attack" || mode === "egress";
+  state.battleStations.mode = state.battleStations.active ? mode : "none";
+}
+
+function clearBattleStations() {
+  setBattleStations("none");
+}
+
 function getGermanVoices() {
   if (!("speechSynthesis" in window)) return [];
   const voices = window.speechSynthesis.getVoices?.() || [];
@@ -3021,6 +3036,7 @@ function standDownToPatrol(source = "manual") {
 
   state.viewMode = "normal";
   state.silentRunning = false;
+  clearBattleStations();
   state.submarine.targetDepth = 60;
   state.submarine.targetSpeed = 3;
   state.battlePhase = BATTLE_PHASES.patrol;
@@ -4255,19 +4271,21 @@ function navigationInterceptAdvice() {
   const estimatedTargetSpeed = observed?.estimatedSpeed ?? Math.max(2, Math.round(focusContact.speed * 2) / 2);
   const rangeToTarget = observed?.lastRange ?? distance(sub, focusContact);
   const shotPlan =
-    state.commandIntent === "evade"
+    state.battleStations.active && state.battleStations.mode === "egress"
       ? evaluateNavigationEgressPoint(
           focusContact,
           estimatedTargetHeading,
           estimatedTargetSpeed,
           rangeToTarget
         )
-      : evaluateNavigationShotPoint(
-          focusContact,
-          estimatedTargetHeading,
-          estimatedTargetSpeed,
-          rangeToTarget
-        );
+      : state.battleStations.active && state.battleStations.mode === "attack"
+        ? evaluateNavigationShotPoint(
+            focusContact,
+            estimatedTargetHeading,
+            estimatedTargetSpeed,
+            rangeToTarget
+          )
+        : null;
   const fallbackOffset =
     state.commandIntent === "evade"
       ? 150
@@ -4387,7 +4405,7 @@ function buildNavigationAdvisor() {
     status = "離脱優先";
     intent = "護衛との離隔を広げ、離脱針路を優先。";
     hint = "航海長の推奨離脱点へ向け、深度を保って離隔を広げる。";
-  } else if (shotPlan && shotPlan.score >= 0.74) {
+  } else if (state.battleStations.active && state.battleStations.mode === "attack" && shotPlan && shotPlan.score >= 0.74) {
     status = "最適射点";
     intent = "推奨射点へ入り、観測から雷撃へ接続。";
     hint = "航海長の射点誘導に合わせ、余計な回頭を避けて射点維持。";
@@ -4773,6 +4791,16 @@ function updateButtons() {
   setButtonState(captainPeriscopeButton, "dim", !periscopeUsable);
   setButtonState(captainBinocularButton, "active", state.viewMode === "binocular");
   setButtonState(captainBinocularButton, "dim", !binocularUsable);
+  setButtonState(
+    captainIntentApproachButton,
+    "active",
+    state.battleStations.active && state.battleStations.mode === "attack"
+  );
+  setButtonState(
+    captainIntentEvadeButton,
+    "active",
+    state.battleStations.active && state.battleStations.mode === "egress"
+  );
   setButtonState(captainAlarmButton, "active", state.alarmDive.active);
   const seqStage = state.torpedoSequence.stage;
   const torpedoSelectActive = seqStage === TORPEDO_SEQUENCE.idle;
@@ -5389,6 +5417,16 @@ function updateHud() {
   const phase = phaseMeta(state.battlePhase);
   const trigger = getContactTriggerMeta();
   const objective = phaseObjectiveMeta(state.battlePhase, bestShot);
+  const battleStationsLabel = !state.battleStations.active
+    ? "解除"
+    : state.battleStations.mode === "attack"
+      ? "攻撃決意"
+      : "離脱決意";
+  const battleStationsNote = !state.battleStations.active
+    ? "通常監視体制。"
+    : state.battleStations.mode === "attack"
+      ? "全艦戦闘配置。航海長は推奨射点へ誘導。"
+      : "全艦戦闘配置。航海長は推奨離脱点へ誘導。";
   const loopMeta = submergedLoopMeta(state.submergedLoop);
   const stage = currentStage();
   const light = lightConditionMeta();
@@ -5518,6 +5556,8 @@ function updateHud() {
   const hudTorpedoSpec = getActiveTorpedoSpec();
   hudObjectiveNode.textContent = binocularObjective.label;
   hudObjectiveNoteNode.textContent = binocularObjective.detail;
+  if (hudBattleStationsNode) hudBattleStationsNode.textContent = battleStationsLabel;
+  if (hudBattleStationsNoteNode) hudBattleStationsNoteNode.textContent = battleStationsNote;
   hudTorpedoStatusNode.textContent = nextImpactTorpedo
     ? `Impact ${nextImpactTorpedo.interceptCountdown.toFixed(1)}s`
     : selectedFire.ready
@@ -5944,6 +5984,7 @@ function resetGame() {
     message: ""
   };
   state.commandIntent = "approach";
+  clearBattleStations();
   state.battlePhase = BATTLE_PHASES.patrol;
   state.battlePhaseEnteredAt = 0;
   initWolfpackState(stage);
@@ -6131,12 +6172,13 @@ function setViewMode(mode) {
       state.binocularAttackState === "allowed" ? "warning" : "bad"
     );
   } else {
+    clearBattleStations();
     state.periscopeControl.bearingOffset = 0;
     if (state.voiceRuntime.lastPeriscopeMode === "periscope") {
       emitGermanRepeater("captainPeriscopeDown");
     }
     setCommandState({
-      captainOrder: "艦長命令: 通常監視、静かに接敵",
+      captainOrder: "艦長命令: 戦闘配置解除、通常監視",
       priorityLabel: "通常",
       priorityTone: "normal",
       sonar: "受動聴音を継続",
@@ -6265,6 +6307,45 @@ function setSilentRunningDirect(enabled) {
 function issueCaptainIntent(intent) {
   const sub = state.submarine;
   const deepDepth = Math.min(230, UBOAT_CLASS.practicalDepth);
+
+  if (intent === "approach") {
+    if (state.battleStations.active && state.battleStations.mode === "attack") {
+      clearBattleStations();
+      state.commandIntent = "approach";
+      setCommandState({
+        captainOrder: "艦長命令: 戦闘配置解除",
+        priorityLabel: "通常",
+        priorityTone: "normal",
+        sonar: "受動聴音を継続",
+        torpedo: "射撃諸元待機",
+        navigation: "接敵を保ちつつ通常監視"
+      });
+      addLog("艦長命令: 戦闘配置解除。攻撃決意を解除。");
+      setStatus("戦闘配置解除。攻撃決意を解除。", "good");
+      updateButtons();
+      return;
+    }
+    setBattleStations("attack");
+  } else if (intent === "evade") {
+    if (state.battleStations.active && state.battleStations.mode === "egress") {
+      clearBattleStations();
+      state.commandIntent = "approach";
+      setCommandState({
+        captainOrder: "艦長命令: 戦闘配置解除",
+        priorityLabel: "通常",
+        priorityTone: "normal",
+        sonar: "受動聴音を継続",
+        torpedo: "射撃諸元待機",
+        navigation: "接敵を保ちつつ通常監視"
+      });
+      addLog("艦長命令: 戦闘配置解除。離脱決意を解除。");
+      setStatus("戦闘配置解除。離脱決意を解除。", "good");
+      updateButtons();
+      return;
+    }
+    setBattleStations("egress");
+  }
+
   state.commandIntent = intent;
 
   switch (intent) {
@@ -6273,9 +6354,9 @@ function issueCaptainIntent(intent) {
       sub.targetDepth = 60;
       setSilentRunningDirect(true);
       setCommandState({
-        captainOrder: "艦長命令: 攻撃決意",
-        priorityLabel: "通常",
-        priorityTone: "normal",
+        captainOrder: "艦長命令: 戦闘配置 / 攻撃決意",
+        priorityLabel: "戦闘配置",
+        priorityTone: "high",
         sonar: "受動聴音で接触を失わず追尾",
         torpedo: "射点成立に向けて諸元待機",
         navigation: "推奨射点へ向けて微速・深度60mで進出"
@@ -6291,9 +6372,9 @@ function issueCaptainIntent(intent) {
       setSilentRunningDirect(true);
       state.voiceRuntime.lastDepthReachedTarget = null;
       setCommandState({
-        captainOrder: "艦長命令: 離脱決意",
-        priorityLabel: "警戒",
-        priorityTone: "high",
+        captainOrder: "艦長命令: 戦闘配置 / 離脱決意",
+        priorityLabel: "戦闘配置",
+        priorityTone: "critical",
         sonar: "護衛接近方位を継続監視",
         torpedo: "射撃より回避を優先",
         navigation: "推奨離脱点へ向けて深度140m・微速で離隔"
