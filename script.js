@@ -3822,6 +3822,46 @@ function evaluateNavigationShotPoint(contact, estimatedTargetHeading, estimatedT
   return candidates.sort((a, b) => b.score - a.score)[0] || null;
 }
 
+function evaluateNavigationEgressPoint(contact, estimatedTargetHeading, estimatedTargetSpeed, rangeToTarget) {
+  const sub = state.submarine;
+  const hostileGroup = state.contacts.filter((entry) => entry.hostile && !entry.destroyed);
+  const nearestHostile = hostileGroup.reduce((best, hostile) => {
+    const d = distance(sub, hostile);
+    return !best || d < best.distance ? { hostile, distance: d } : best;
+  }, null);
+  const referenceBearing = nearestHostile
+    ? bearing(nearestHostile.hostile, sub)
+    : normalizeAngle(estimatedTargetHeading + 180);
+  const egressBearing = normalizeAngle(referenceBearing + (Math.random() > 0.5 ? 35 : -35));
+  const egressDistance = clamp(rangeToTarget * 0.45, 900, 2200);
+  const waypoint = {
+    x: clamp(sub.x + Math.cos(toRadians(egressBearing)) * egressDistance, 0, WORLD.width),
+    y: clamp(sub.y + Math.sin(toRadians(egressBearing)) * egressDistance, 0, WORLD.height)
+  };
+  const ownDistance = distance(sub, waypoint);
+  const requiredSpeed = clamp(ownDistance / 220 / WORLD_METERS_PER_SECOND_PER_KNOT, 3, 6.5);
+  const escortRisk = hostileGroup.reduce((maxRisk, hostile) => {
+    const risk = clamp((1800 - distance(hostile, waypoint)) / 1800, 0, 1);
+    return Math.max(maxRisk, risk);
+  }, 0);
+  return {
+    kind: "egress",
+    contact,
+    waypoint,
+    eta: Math.round(ownDistance / Math.max(0.1, knotsToWorldSpeed(requiredSpeed))),
+    egressBearing,
+    shotRange: null,
+    desiredBearingAngle: null,
+    maxEffectiveRange: null,
+    requiredSpeed,
+    recommendedHeading: bearing(sub, waypoint),
+    headingShift: Math.abs(normalizeAngle(bearing(sub, waypoint) - sub.heading)),
+    escortRisk,
+    score: clamp(0.8 - escortRisk * 0.42, 0.3, 0.92),
+    status: escortRisk < 0.28 ? "良" : escortRisk < 0.48 ? "可" : "苦"
+  };
+}
+
 function computeTorpedoSolution(contact) {
   const sub = state.submarine;
   const nav = state.navigationTactical;
@@ -4214,12 +4254,20 @@ function navigationInterceptAdvice() {
   const estimatedTargetHeading = observed?.estimatedHeading ?? ((Math.round(focusContact.heading / 10) * 10) % 360 + 360) % 360;
   const estimatedTargetSpeed = observed?.estimatedSpeed ?? Math.max(2, Math.round(focusContact.speed * 2) / 2);
   const rangeToTarget = observed?.lastRange ?? distance(sub, focusContact);
-  const shotPlan = evaluateNavigationShotPoint(
-    focusContact,
-    estimatedTargetHeading,
-    estimatedTargetSpeed,
-    rangeToTarget
-  );
+  const shotPlan =
+    state.commandIntent === "evade"
+      ? evaluateNavigationEgressPoint(
+          focusContact,
+          estimatedTargetHeading,
+          estimatedTargetSpeed,
+          rangeToTarget
+        )
+      : evaluateNavigationShotPoint(
+          focusContact,
+          estimatedTargetHeading,
+          estimatedTargetSpeed,
+          rangeToTarget
+        );
   const fallbackOffset =
     state.commandIntent === "evade"
       ? 150
@@ -4286,11 +4334,17 @@ function navigationInterceptAdvice() {
     waypoint,
     shotPlan,
     note: shotPlan
-      ? `航海長具申: 針路 ${formatHeading(recommendedHeading)}、速力 ${recommendedSpeed.toFixed(1)}kt で推奨射点へ進出。敵推定 針路 ${formatHeading(
-          estimatedTargetHeading
-        )} / 速力 ${estimatedTargetSpeed.toFixed(1)}kt。射点 ETA ${shotPlan.eta}s / 方位角 ${Math.round(
-          shotPlan.desiredBearingAngle
-        )}° / 射距離 ${Math.round(shotPlan.shotRange)}m / 評価 ${shotPlan.status}。`
+      ? shotPlan.kind === "egress"
+        ? `航海長具申: 針路 ${formatHeading(recommendedHeading)}、速力 ${recommendedSpeed.toFixed(1)}kt で推奨離脱点へ進出。敵推定 針路 ${formatHeading(
+            estimatedTargetHeading
+          )} / 速力 ${estimatedTargetSpeed.toFixed(1)}kt。離脱 ETA ${shotPlan.eta}s / 離脱針路 ${formatHeading(
+            shotPlan.egressBearing
+          )} / 評価 ${shotPlan.status}。`
+        : `航海長具申: 針路 ${formatHeading(recommendedHeading)}、速力 ${recommendedSpeed.toFixed(1)}kt で推奨射点へ進出。敵推定 針路 ${formatHeading(
+            estimatedTargetHeading
+          )} / 速力 ${estimatedTargetSpeed.toFixed(1)}kt。射点 ETA ${shotPlan.eta}s / 方位角 ${Math.round(
+            shotPlan.desiredBearingAngle
+          )}° / 射距離 ${Math.round(shotPlan.shotRange)}m / 評価 ${shotPlan.status}。`
       : `航海長具申: 針路 ${formatHeading(recommendedHeading)}、速力 ${recommendedSpeed.toFixed(1)}kt で進出。敵推定 針路 ${formatHeading(
           estimatedTargetHeading
         )} / 速力 ${estimatedTargetSpeed.toFixed(1)}kt。目標進出点 ${Math.round(fallbackRadius)}m 先。`
@@ -4332,7 +4386,7 @@ function buildNavigationAdvisor() {
   if (state.commandIntent === "evade" || state.battlePhase === BATTLE_PHASES.egress) {
     status = "離脱優先";
     intent = "護衛との離隔を広げ、離脱針路を優先。";
-    hint = "速力を抑えつつ深度を取り、離脱海域へ向けて針路維持。";
+    hint = "航海長の推奨離脱点へ向け、深度を保って離隔を広げる。";
   } else if (shotPlan && shotPlan.score >= 0.74) {
     status = "最適射点";
     intent = "推奨射点へ入り、観測から雷撃へ接続。";
@@ -4360,7 +4414,9 @@ function buildNavigationAdvisor() {
       1
     )}kt、深度 ${recommendedDepth}m。${
       shotPlan
-        ? ` 射点 ETA ${shotPlan.eta}s / 評価 ${shotPlan.status}。`
+        ? shotPlan.kind === "egress"
+          ? ` 離脱 ETA ${shotPlan.eta}s / 評価 ${shotPlan.status}。`
+          : ` 射点 ETA ${shotPlan.eta}s / 評価 ${shotPlan.status}。`
         : ""
     }`,
     intent,
@@ -5779,7 +5835,7 @@ function updateHud() {
       : flagshipAlive
       ? `重要輸送船まで推定 ${Math.round(distance(sub, flagship))}m。現在針路から ${Math.round(
           normalizeAngle(bearing(sub, flagship) - sub.heading)
-        )} 度。${navigationAdvisor.shotPlan ? `推奨射点 ${navigationAdvisor.shotPlan.status} / ETA ${navigationAdvisor.shotPlan.eta}s。` : ""} 接近効率 ${Math.round(nav.approachRating * 100)}% / 回り込み ${Math.round(
+        )} 度。${navigationAdvisor.shotPlan ? `${navigationAdvisor.shotPlan.kind === "egress" ? "推奨離脱点" : "推奨射点"} ${navigationAdvisor.shotPlan.status} / ETA ${navigationAdvisor.shotPlan.eta}s。` : ""} 接近効率 ${Math.round(nav.approachRating * 100)}% / 回り込み ${Math.round(
           tactical.positioning * 100
         )}% / 射点形成 ${Math.round(tactical.firingLane * 100)}%。`
       : `離脱海域まで ${Math.round(distance(sub, state.escapeZone))}m。現在針路から ${Math.round(
@@ -5796,9 +5852,11 @@ function updateHud() {
     : flagshipAlive
     ? `${navigationAdvisor.detail}${
         navShotPlan
-          ? ` 推奨射点 ETA ${navShotPlan.eta}s / 射距離 ${Math.round(navShotPlan.shotRange)}m / 方位角 ${Math.round(
-              navShotPlan.desiredBearingAngle
-            )}° / 所要 ${navShotPlan.requiredSpeed.toFixed(1)}kt / 脅威 ${Math.round(navShotPlan.escortRisk * 100)}%。`
+          ? navShotPlan.kind === "egress"
+            ? ` 推奨離脱点 ETA ${navShotPlan.eta}s / 離脱針路 ${formatHeading(navShotPlan.egressBearing)} / 所要 ${navShotPlan.requiredSpeed.toFixed(1)}kt / 脅威 ${Math.round(navShotPlan.escortRisk * 100)}%。`
+            : ` 推奨射点 ETA ${navShotPlan.eta}s / 射距離 ${Math.round(navShotPlan.shotRange)}m / 方位角 ${Math.round(
+                navShotPlan.desiredBearingAngle
+              )}° / 所要 ${navShotPlan.requiredSpeed.toFixed(1)}kt / 脅威 ${Math.round(navShotPlan.escortRisk * 100)}%。`
           : ""
       } 針路誤差 ${Math.round(nav.headingError)}° / 深度誤差 ${Math.round(nav.depthError)}m / 回り込み ${Math.round(tactical.positioning * 100)}% / 射点形成 ${Math.round(
         tactical.firingLane * 100
@@ -6215,17 +6273,17 @@ function issueCaptainIntent(intent) {
       sub.targetDepth = 60;
       setSilentRunningDirect(true);
       setCommandState({
-        captainOrder: "艦長命令: 接敵維持",
+        captainOrder: "艦長命令: 攻撃決意",
         priorityLabel: "通常",
         priorityTone: "normal",
         sonar: "受動聴音で接触を失わず追尾",
         torpedo: "射点成立に向けて諸元待機",
-        navigation: "深度 60m、微速で敵前方へ回り込む"
+        navigation: "推奨射点へ向けて微速・深度60mで進出"
       });
       emitSpeedVoice(3);
       emitDepthVoice(60);
-      addLog("艦長命令: 接敵維持。航海長は微速・深度60mで接敵継続。");
-      setStatus("接敵維持。航海長へ接近コースを下令。");
+      addLog("艦長命令: 攻撃決意。航海長は推奨射点へ向けて微速・深度60mで進出。");
+      setStatus("攻撃決意。航海長へ射点誘導を下令。");
       break;
     case "evade":
       sub.targetSpeed = 3;
@@ -6233,17 +6291,17 @@ function issueCaptainIntent(intent) {
       setSilentRunningDirect(true);
       state.voiceRuntime.lastDepthReachedTarget = null;
       setCommandState({
-        captainOrder: "艦長命令: 被探知回避",
+        captainOrder: "艦長命令: 離脱決意",
         priorityLabel: "警戒",
         priorityTone: "high",
         sonar: "護衛接近方位を継続監視",
         torpedo: "射撃より回避を優先",
-        navigation: "深度 140m、微速で離隔保持"
+        navigation: "推奨離脱点へ向けて深度140m・微速で離隔"
       });
       emitSpeedVoice(3);
       emitDepthVoice(140);
-      addLog("艦長命令: 被探知回避。航海長は140mへ潜航、離隔を優先。");
-      setStatus("被探知回避。航海長へ深深度の離隔針路を下令。", "warning");
+      addLog("艦長命令: 離脱決意。航海長は推奨離脱点へ向け140mで離隔を優先。");
+      setStatus("離脱決意。航海長へ最適離脱位置への誘導を下令。", "warning");
       break;
     case "periscope":
       sub.targetSpeed = 3;
@@ -8273,7 +8331,7 @@ function drawNavigationMainPlot() {
 
     if (prediction.shotPoint) {
       const shotPoint = navPoint(prediction.shotPoint.x, prediction.shotPoint.y);
-      ctx.strokeStyle = "#7ce8a6";
+      ctx.strokeStyle = prediction.shotPlan?.kind === "egress" ? "#9bd9ff" : "#7ce8a6";
       ctx.lineWidth = 3;
       ctx.beginPath();
       ctx.moveTo(shotPoint.x - 12, shotPoint.y - 12);
@@ -8281,9 +8339,9 @@ function drawNavigationMainPlot() {
       ctx.moveTo(shotPoint.x + 12, shotPoint.y - 12);
       ctx.lineTo(shotPoint.x - 12, shotPoint.y + 12);
       ctx.stroke();
-      ctx.fillStyle = "#d9ffe6";
+      ctx.fillStyle = prediction.shotPlan?.kind === "egress" ? "#d8ecff" : "#d9ffe6";
       ctx.fillText(
-        `推奨射点 ${prediction.shotPlan?.status || ""} / ETA ${prediction.shotPlan?.eta ?? "--"}s`,
+        `${prediction.shotPlan?.kind === "egress" ? "推奨離脱点" : "推奨射点"} ${prediction.shotPlan?.status || ""} / ETA ${prediction.shotPlan?.eta ?? "--"}s`,
         shotPoint.x + 14,
         shotPoint.y + 18
       );
@@ -8321,7 +8379,9 @@ function drawNavigationMainPlot() {
     advice.heading !== null
       ? `具申 針路 ${formatHeading(advice.heading)} / 速力 ${advice.speed.toFixed(1)}kt${
           advice.shotPlan
-            ? ` / 射点 ${advice.shotPlan.status} / 方位角 ${Math.round(advice.shotPlan.desiredBearingAngle)}°`
+            ? advice.shotPlan.kind === "egress"
+              ? ` / 離脱点 ${advice.shotPlan.status} / 針路 ${formatHeading(advice.shotPlan.egressBearing)}`
+              : ` / 射点 ${advice.shotPlan.status} / 方位角 ${Math.round(advice.shotPlan.desiredBearingAngle)}°`
             : ""
         }`
       : "有効接触なし",
