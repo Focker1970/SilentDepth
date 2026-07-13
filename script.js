@@ -1030,6 +1030,13 @@ function clamp(value, min, max) {
   return Math.max(min, Math.min(max, value));
 }
 
+function speedButtonMatches(commandedSpeed, targetSpeed) {
+  if (commandedSpeed <= 0) return targetSpeed <= 0.5;
+  if (commandedSpeed <= 3) return targetSpeed > 0.5 && targetSpeed < 4.5;
+  if (commandedSpeed <= 6) return targetSpeed >= 4.5 && targetSpeed < 7.5;
+  return targetSpeed >= 7.5;
+}
+
 function canUseCampaignStorage() {
   try {
     return typeof window !== "undefined" && Boolean(window.localStorage);
@@ -4887,10 +4894,7 @@ function updateButtons() {
     state.viewMode === "binocular" && state.binocularAttackState === "blocked";
 
   for (const button of speedButtons) {
-    button.classList.toggle(
-      "active",
-      Number(button.dataset.speed) === state.submarine.targetSpeed
-    );
+    button.classList.toggle("active", speedButtonMatches(Number(button.dataset.speed), state.submarine.targetSpeed));
   }
 
   for (const button of depthButtons) {
@@ -6396,6 +6400,7 @@ function commandSpeed(value) {
     setStatus(`速力を ${value} ノットへ調整中。`);
   }
   updateButtons();
+  updateHud();
 }
 
 function commandDepth(value) {
