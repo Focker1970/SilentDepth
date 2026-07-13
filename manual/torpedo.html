@@ -39,6 +39,17 @@
         </section>
 
         <section class="section">
+          <h2>TDC の入力順</h2>
+          <ol class="step-list">
+            <li><strong>方位同期</strong> まず焦点目標の方位を TDC に入れる。</li>
+            <li><strong>距離同期</strong> 潜望鏡測距、または双眼鏡の概算距離を入れる。</li>
+            <li><strong>Speed / AOB 採用</strong> 観測補助が出ていれば採用して微修正する。</li>
+            <li><strong>諸元入力</strong> ここで初めて発射解の成立を確認する。</li>
+          </ol>
+          <p class="note"><code>標的選定</code> はロック対象を決める操作、<code>方位同期</code> はその目標の現在方位を TDC に写す操作です。意味が違います。</p>
+        </section>
+
+        <section class="section">
           <h2>魚雷種別の使い分け</h2>
           <div class="table-wrap">
             <table>
@@ -100,6 +111,14 @@
             <article class="card">
               <h3>実用射程を超えている</h3>
               <p>TDC が通っていても、実用射程を超えると命中率は大きく落ちます。</p>
+            </article>
+            <article class="card">
+              <h3>方位同期を忘れている</h3>
+              <p>距離だけ入っていても、方位が古いままだと別の射線になります。</p>
+            </article>
+            <article class="card">
+              <h3>電池切れで射点維持できない</h3>
+              <p>潜航中に Battery LOW になると速力が出ず、そもそも有利位置を保てません。浮上充電を優先します。</p>
             </article>
           </div>
         </section>
