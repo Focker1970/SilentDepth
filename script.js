@@ -1037,6 +1037,10 @@ function speedButtonMatches(commandedSpeed, targetSpeed) {
   return targetSpeed >= 7.5;
 }
 
+function batteryTooLowForSubmergedPropulsion(sub = state.submarine) {
+  return !isFullySurfaced(sub) && sub.battery <= 0;
+}
+
 function canUseCampaignStorage() {
   try {
     return typeof window !== "undefined" && Boolean(window.localStorage);
@@ -4892,9 +4896,15 @@ function updateButtons() {
   };
   const binocularBlockedForAttack =
     state.viewMode === "binocular" && state.binocularAttackState === "blocked";
+  const batteryLocked = batteryTooLowForSubmergedPropulsion();
 
   for (const button of speedButtons) {
-    button.classList.toggle("active", speedButtonMatches(Number(button.dataset.speed), state.submarine.targetSpeed));
+    const commandedSpeed = Number(button.dataset.speed);
+    const disabledForBattery = batteryLocked && commandedSpeed > 0;
+    button.classList.toggle("active", speedButtonMatches(commandedSpeed, state.submarine.targetSpeed));
+    button.classList.toggle("dim", disabledForBattery);
+    button.disabled = disabledForBattery;
+    button.title = disabledForBattery ? "Battery too low - 浮上して充電せよ" : "";
   }
 
   for (const button of depthButtons) {
@@ -5593,6 +5603,7 @@ function updateHud() {
   const activeChasers = state.contacts.filter(
     (contact) => contact.hostile && !contact.destroyed && (contact.chaseModeTimer || 0) > 0
   ).length;
+  const batteryLocked = batteryTooLowForSubmergedPropulsion(sub);
   const binocularFocus = state.viewMode === "binocular"
     ? getPeriscopeVisuals().find((entry) => entry.id === state.periscopeControl.focusContactId) ?? null
     : null;
@@ -5649,7 +5660,7 @@ function updateHud() {
   document.body.dataset.lightCondition = light.key;
 
   hullNode.textContent = `${Math.round(sub.hull)}%`;
-  batteryNode.textContent = `${Math.round(sub.battery)}%`;
+  batteryNode.textContent = batteryLocked ? `${Math.round(sub.battery)}% / LOW` : `${Math.round(sub.battery)}%`;
   depthNode.textContent = `${Math.round(sub.depth)}m`;
   speedNode.textContent = `${sub.speed.toFixed(1)}kt`;
   noiseNode.textContent = noiseLabel(sub.noise);
@@ -5793,7 +5804,9 @@ function updateHud() {
     : stage.id === "destroyer_escape"
     ? `駆逐艦回避訓練。離脱海域まで ${Math.round(distance(sub, state.escapeZone))}m。探知度 ${Math.round(
         sub.detection * 100
-      )}%。${light.label}。${depthBandLabel(sub)} / 機関 ${propulsionModeLabel(sub)}。`
+      )}%。${light.label}。${depthBandLabel(sub)} / 機関 ${propulsionModeLabel(sub)}。${
+        batteryLocked ? " Battery too low。浮上して充電せよ。" : ""
+      }`
     : flagshipAlive
     ? `探知度 ${Math.round(sub.detection * 100)}%。${
         detectedContacts > 0 ? `${detectedContacts} 件の接触あり。` : "接触はまだ薄い。"
@@ -5818,6 +5831,8 @@ function updateHud() {
       }。${
         state.alarmDive.active
           ? ` 急速潜航 ${alarmCompleted}/5、残り ${state.alarmDive.timer.toFixed(1)} 秒。`
+          : batteryLocked
+            ? " Battery too low。潜航推進不可。浮上して充電せよ。"
           : state.binocularRecentRiskyShotTimer > 0
             ? ` 双眼鏡危険発射後 ${state.binocularRecentRiskyShotTimer.toFixed(1)} 秒。即潜航を要する。`
             : activeChasers > 0
@@ -6061,7 +6076,7 @@ function updateHud() {
         nav.headingError
       )} 度 / 深度誤差 ${Math.round(nav.depthError)}m / 潜望鏡安定 ${
         nav.periscopeStable ? "良" : "不十分"
-      }。`
+      }。${batteryLocked ? " Battery too low。浮上して充電せよ。" : ""}`
     : flagshipAlive
     ? `${navigationAdvisor.detail}${
         navShotPlan
@@ -6073,8 +6088,10 @@ function updateHud() {
           : ""
       } 針路誤差 ${Math.round(nav.headingError)}° / 深度誤差 ${Math.round(nav.depthError)}m / 回り込み ${Math.round(tactical.positioning * 100)}% / 射点形成 ${Math.round(
         tactical.firingLane * 100
-      )}%。`
-    : `報告: 離脱針路を維持。海域端まで ${Math.round(distance(sub, state.escapeZone))}m。`;
+      )}%。${batteryLocked ? " Battery too low。浮上して充電せよ。" : ""}`
+    : `報告: 離脱針路を維持。海域端まで ${Math.round(distance(sub, state.escapeZone))}m。${
+        batteryLocked ? " Battery too low。浮上して充電せよ。" : ""
+      }`;
   navigationDutyNode.textContent =
     state.battlePhase === BATTLE_PHASES.alarmDive
       ? "最大下げ角で潜航"
@@ -6091,7 +6108,9 @@ function updateHud() {
     state.battlePhase === BATTLE_PHASES.alarmDive
       ? `急速潜航。深度 ${Math.round(sub.depth)}m、潜降率を維持。`
       : state.battlePhase === BATTLE_PHASES.submergedCombat
-      ? `${loopMeta.label}。${navigationAdvisor.detail} 艦内操艦は針路・深度、外部記録は ${state.reporting.ownGrid}。`
+      ? `${loopMeta.label}。${navigationAdvisor.detail} 艦内操艦は針路・深度、外部記録は ${state.reporting.ownGrid}。${
+          batteryLocked ? " Battery too low。浮上して充電せよ。" : ""
+        }`
       : `${navigationReportDetailNode.textContent} 外部報告座標 ${state.reporting.ownGrid}。`;
   navApproachRatingNode.textContent = `${Math.round(nav.approachRating * 100)}%`;
   navHeadingErrorNode.textContent = `${Math.round(nav.headingError)}°`;
@@ -6371,6 +6390,12 @@ function setViewMode(mode) {
 }
 
 function commandSpeed(value) {
+  if (batteryTooLowForSubmergedPropulsion() && value > 0) {
+    setStatus("Battery too low。潜航中は出力不足。浮上して充電せよ。", "bad");
+    updateButtons();
+    updateHud();
+    return;
+  }
   if (state.alarmDive.active && value > 0 && value < 4) {
     value = 4;
   }
@@ -6973,7 +6998,7 @@ function updateSubmarine(deltaTime) {
 
   if (!surfaced && sub.battery <= 0) {
     sub.targetSpeed = Math.min(sub.targetSpeed, 2);
-    setStatus("電池切れ。出力が落ちる。", "bad");
+    setStatus("Battery too low。潜航中は出力不足。浮上してディーゼル充電せよ。", "bad");
   }
 
   if (sub.depth > UBOAT_CLASS.practicalDepth) {
