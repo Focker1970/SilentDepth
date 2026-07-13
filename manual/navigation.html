@@ -48,6 +48,17 @@
             <li><code>浮上 / 半没 / 15m / 60m / 140m / 230m</code> で深度変更</li>
             <li><code>左へ / 保持 / 右へ</code> で針路調整</li>
             <li>Navigation Plot で自艦提案進路、敵予測進路、推奨射点または推奨離脱点を確認</li>
+            <li>Marinequadratkarte では、自艦位置と接触位置の海軍グリッドを確認できる</li>
+          </ul>
+        </section>
+
+        <section class="section">
+          <h2>電池切れ時の挙動</h2>
+          <ul>
+            <li>潜航中にバッテリーが 0 になると、<code>微速 / 巡航 / 全速</code> はグレーアウトします。</li>
+            <li>このとき HUD と報告欄には <code>Battery too low。浮上して充電せよ。</code> が出ます。</li>
+            <li>停止は使えますが、実際の解決策は <code>浮上</code> してディーゼル充電へ戻ることです。</li>
+            <li>潜航を続けると速度が出ず、回避も接近も成立しにくくなります。</li>
           </ul>
         </section>
 
@@ -59,6 +70,7 @@
             <li><strong>観測前</strong> 推奨射点が近づいたら <code>15m</code> へ上げる。</li>
             <li><strong>浮上観測</strong> 安全時だけ <code>0m</code> へ上げて双眼鏡を使う。</li>
             <li><strong>離脱決意中</strong> 危険なら推奨離脱点へ向けて <code>140m</code> かそれ以上で離脱。</li>
+            <li><strong>電池切れ</strong> <code>LOW</code> が出たら、操艦継続よりまず浮上充電を優先する。</li>
           </ol>
         </section>
       </div>
