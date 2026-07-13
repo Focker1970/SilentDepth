@@ -651,8 +651,9 @@ const SONAR_SAMPLE_FILES = {
   convoy: "audio/sonar_ship_convoy.mp3"
 };
 const MARINE_GRID_IMAGE_FILES = {
-  atlantic: "assets/maps/grid_atlantic.gif",
-  ae: "assets/maps/grid_ae.gif"
+  atlantic: "assets/maps/grid_atlantic.jpg",
+  am: "assets/maps/grid_am.jpg",
+  ae: "assets/maps/grid_ae.jpg"
 };
 
 function createMarineGridImages() {
@@ -3704,7 +3705,7 @@ const STAGES = [
       major: "AM",
       title: "AM / 北大西洋船団航路",
       detail: "英国西方・北大西洋の主要待ち伏せ海域。",
-      imageKey: "atlantic"
+      imageKey: "am"
     },
     startClock: 22 * 3600 + 15 * 60,
     mission: "北大西洋のコンボイを追跡し、重要輸送船を雷撃して駆逐艦の反撃圏から離脱せよ。",
