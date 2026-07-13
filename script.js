@@ -8255,6 +8255,47 @@ function navigationPlotContacts() {
 function drawNavigationMainPlot() {
   const width = canvas.width;
   const height = canvas.height;
+  const drawNavLabel = (text, x, y, tone = "green") => {
+    ctx.save();
+    ctx.font = "12px Avenir Next, Hiragino Sans, sans-serif";
+    const metrics = ctx.measureText(text);
+    const labelWidth = metrics.width + 14;
+    const labelHeight = 20;
+    const left = clamp(x, 10, width - labelWidth - 10);
+    const top = clamp(y - labelHeight + 4, 10, height - labelHeight - 10);
+    const palette =
+      tone === "red"
+        ? {
+            fill: "rgba(44, 14, 12, 0.84)",
+            stroke: "rgba(255, 161, 148, 0.68)",
+            text: "#ffd9d1"
+          }
+        : tone === "blue"
+          ? {
+              fill: "rgba(10, 20, 36, 0.84)",
+              stroke: "rgba(155, 217, 255, 0.62)",
+              text: "#d8ecff"
+            }
+          : {
+              fill: "rgba(9, 28, 21, 0.84)",
+              stroke: "rgba(124, 232, 166, 0.62)",
+              text: "#d9ffe6"
+            };
+    ctx.fillStyle = palette.fill;
+    ctx.strokeStyle = palette.stroke;
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    if (typeof ctx.roundRect === "function") {
+      ctx.roundRect(left, top, labelWidth, labelHeight, 6);
+    } else {
+      ctx.rect(left, top, labelWidth, labelHeight);
+    }
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = palette.text;
+    ctx.fillText(text, left + 7, top + 14);
+    ctx.restore();
+  };
   const prediction = navigationPlotPrediction();
   const plotContacts = navigationPlotContacts();
   const rangeSeeds = [2200, 1600];
@@ -8420,11 +8461,11 @@ function drawNavigationMainPlot() {
       ctx.moveTo(shotPoint.x + 12, shotPoint.y - 12);
       ctx.lineTo(shotPoint.x - 12, shotPoint.y + 12);
       ctx.stroke();
-      ctx.fillStyle = prediction.shotPlan?.kind === "egress" ? "#d8ecff" : "#d9ffe6";
-      ctx.fillText(
+      drawNavLabel(
         `${prediction.shotPlan?.kind === "egress" ? "推奨離脱点" : "推奨射点"} ${prediction.shotPlan?.status || ""} / ETA ${prediction.shotPlan?.eta ?? "--"}s`,
-        shotPoint.x + 14,
-        shotPoint.y + 18
+        shotPoint.x + 16,
+        shotPoint.y + 28,
+        prediction.shotPlan?.kind === "egress" ? "blue" : "green"
       );
     }
 
@@ -8438,8 +8479,7 @@ function drawNavigationMainPlot() {
       ctx.moveTo(hit.x + 10, hit.y - 10);
       ctx.lineTo(hit.x - 10, hit.y + 10);
       ctx.stroke();
-      ctx.fillStyle = "#ffd9d1";
-      ctx.fillText("雷撃予定点", hit.x + 14, hit.y - 12);
+      drawNavLabel("雷撃予定点", hit.x + 16, hit.y - 18, "red");
     }
   }
 
