@@ -29,6 +29,8 @@ const hudTorpedoStatusNode = document.getElementById("hud-torpedo-status");
 const hudTorpedoNoteNode = document.getElementById("hud-torpedo-note");
 const hudAcousticModeNode = document.getElementById("hud-acoustic-mode");
 const hudAcousticNoteNode = document.getElementById("hud-acoustic-note");
+const hudGridReportNode = document.getElementById("hud-grid-report");
+const hudGridNoteNode = document.getElementById("hud-grid-note");
 const captainAlarmCardNode = document.getElementById("captain-alarm-card");
 const alarmStateNode = document.getElementById("alarm-state");
 const alarmTimerNode = document.getElementById("alarm-timer");
@@ -841,6 +843,17 @@ function createWolfpackState() {
   };
 }
 
+function createReportingState() {
+  return {
+    ownGrid: "-- ----",
+    contactGrid: "-- ----",
+    lastExternalMessage: "外部報告待機。",
+    lastExternalType: "none",
+    lastExternalKey: null,
+    lastExternalAt: -Infinity
+  };
+}
+
 const state = {
   running: true,
   time: 0,
@@ -953,6 +966,7 @@ const state = {
   commandIntent: "approach",
   campaign: createCampaignState(),
   wolfpack: createWolfpackState(),
+  reporting: createReportingState(),
   contactTactical: {
     focusContactId: null,
     precision: 0,
@@ -3743,6 +3757,88 @@ function currentNavalGridMeta() {
   };
 }
 
+function marineGridDigitsForPoint(x, y) {
+  let minX = 0;
+  let maxX = WORLD.width;
+  let minY = 0;
+  let maxY = WORLD.height;
+  let digits = "";
+
+  for (let level = 0; level < 4; level += 1) {
+    const width = maxX - minX;
+    const height = maxY - minY;
+    const col = clamp(Math.floor(((x - minX) / Math.max(1, width)) * 3), 0, 2);
+    const row = clamp(Math.floor(((y - minY) / Math.max(1, height)) * 3), 0, 2);
+    digits += String(row * 3 + col + 1);
+    const cellWidth = width / 3;
+    const cellHeight = height / 3;
+    minX += col * cellWidth;
+    maxX = minX + cellWidth;
+    minY += row * cellHeight;
+    maxY = minY + cellHeight;
+  }
+
+  return digits;
+}
+
+function marineGridCodeForPoint(x, y, major = currentNavalGridMeta().major) {
+  return `${major} ${marineGridDigitsForPoint(x, y)}`;
+}
+
+function marineGridCodeForContact(contact) {
+  if (!contact) return "-- ----";
+  return marineGridCodeForPoint(contact.x, contact.y);
+}
+
+function ownMarineGridCode() {
+  return marineGridCodeForPoint(state.submarine.x, state.submarine.y);
+}
+
+function reportFocusContactLabel() {
+  return state.reporting.contactGrid !== "-- ----"
+    ? `接触 ${state.reporting.contactGrid}`
+    : currentNavalGridMeta().detail;
+}
+
+function contactReportBearingText(contact) {
+  if (!contact) return "方位不明";
+  return `方位 ${Math.round(normalizeAngle(bearing(state.submarine, contact) - state.submarine.heading))}°`;
+}
+
+function updateReportingState(focusContact = null, reportType = null) {
+  const ownGrid = ownMarineGridCode();
+  const contactGrid = focusContact ? marineGridCodeForContact(focusContact) : "-- ----";
+  state.reporting.ownGrid = ownGrid;
+  state.reporting.contactGrid = contactGrid;
+
+  if (focusContact) {
+    const nextType = reportType || (focusContact.visualDetected ? "visual_contact" : "sonar_contact");
+    state.reporting.lastExternalType = nextType;
+    state.reporting.lastExternalMessage =
+      nextType === "visual_contact"
+        ? `BdU報告: 自艦 ${ownGrid} / ${contactLabel(focusContact)} 推定位置 ${contactGrid}。`
+        : `BdU報告: 自艦 ${ownGrid} / 接触推定位置 ${contactGrid}。`;
+  } else if (state.reporting.lastExternalType === "none") {
+    state.reporting.lastExternalMessage = `BdU報告待機: 自艦位置 ${ownGrid}。`;
+  }
+}
+
+function maybeLogExternalGridReport(contact, reportType = "contact") {
+  if (!contact) return;
+  updateReportingState(contact, reportType);
+  const key = `${reportType}:${contact.id}:${state.reporting.ownGrid}:${state.reporting.contactGrid}`;
+  if (state.reporting.lastExternalKey === key && state.time - state.reporting.lastExternalAt < 45) {
+    return;
+  }
+  state.reporting.lastExternalKey = key;
+  state.reporting.lastExternalAt = state.time;
+  const contactPart =
+    reportType === "visual_contact"
+      ? `${contactLabel(contact)} 視認位置 ${state.reporting.contactGrid}`
+      : `接触推定位置 ${state.reporting.contactGrid}`;
+  addLog(`BdU報告: 自艦 ${state.reporting.ownGrid} / ${contactPart}。`);
+}
+
 function syncStageSelect() {
   if (!stageSelectNode) return;
   const nextValue = String(state.stageIndex);
@@ -4734,6 +4830,10 @@ function updateContactEvents() {
           ? playerSonarLabel(contact)
           : playerContactLabel(contact);
       addLog(`${contact.detectionSource}で${contactText}を捕捉。`);
+      maybeLogExternalGridReport(
+        contact,
+        contact.visualDetected ? "visual_contact" : "sonar_contact"
+      );
       setStatus(`${contact.detectionSource}で ${contactText} を発見。`, "warning");
       emitGermanRepeater(contactVoiceTrigger(contact));
     } else if (
@@ -4747,6 +4847,10 @@ function updateContactEvents() {
           : playerContactLabel(contact);
       addLog(
         `${contactText} の追跡手段が ${contact.lastDetectionSource} から ${contact.detectionSource} へ移行。`
+      );
+      maybeLogExternalGridReport(
+        contact,
+        contact.visualDetected ? "visual_contact" : "sonar_contact"
       );
       emitGermanRepeater(contactVoiceTrigger(contact));
     } else if (!contact.detectionSource && contact.lastDetectionSource) {
@@ -5489,6 +5593,20 @@ function updateHud() {
     : null;
   const sonarAdvisor = buildSonarAdvisorReport();
   const navigationAdvisor = buildNavigationAdvisor();
+  const reportFocusContact =
+    selectedShot?.contact ||
+    bestShot?.contact ||
+    state.sonarContacts[0]?.contact ||
+    state.contacts.find((contact) => !contact.destroyed && contact.detected) ||
+    null;
+  updateReportingState(
+    reportFocusContact,
+    reportFocusContact
+      ? reportFocusContact.visualDetected
+        ? "visual_contact"
+        : "sonar_contact"
+      : null
+  );
   state.contactAssessment = sonarAdvisor;
   state.navigationAdvice = navigationAdvisor;
   state.advisorHints = [sonarAdvisor.hint, navigationAdvisor.hint].filter(Boolean);
@@ -5648,6 +5766,12 @@ function updateHud() {
       : audioState.enabled
         ? "ヘッドホンで左右定位を監視。"
         : "受動聴音ログのみ表示。";
+  if (hudGridReportNode) hudGridReportNode.textContent = state.reporting.ownGrid;
+  if (hudGridNoteNode) {
+    hudGridNoteNode.textContent = reportFocusContact
+      ? `艦内報告は ${contactReportBearingText(reportFocusContact)}。外部記録は ${state.reporting.contactGrid}。`
+      : `艦内報告は方位系。外部記録は現在位置 ${state.reporting.ownGrid}。`;
+  }
   captainOrderNode.textContent = state.command.captainOrder;
   commandPriorityNode.textContent = state.command.priorityLabel;
   commandPriorityNode.dataset.priority = state.command.priorityTone;
@@ -5724,7 +5848,7 @@ function updateHud() {
       : state.battlePhase === BATTLE_PHASES.egress
           ? "離脱針路の維持と護衛回避"
       : "意図命令、観測、命令優先度の調整";
-  captainReportNode.textContent = `${state.command.captainOrder} / 優先度 ${state.command.priorityLabel}`;
+  captainReportNode.textContent = `${state.command.captainOrder} / 優先度 ${state.command.priorityLabel} / ${state.reporting.lastExternalMessage}`;
   syncCaptainAlarmCard();
   alarmStateNode.textContent = state.alarmDive.active
     ? "急速潜航中"
@@ -5859,8 +5983,8 @@ function updateHud() {
     state.battlePhase === BATTLE_PHASES.alarmDive
       ? "急速潜航。護衛接近方位を連続報告。"
       : state.battlePhase === BATTLE_PHASES.submergedCombat
-      ? `${loopMeta.label}。${loopMeta.sonar} / ${sonarAdvisor.brief}`
-      : sonarAdvisor.detail;
+      ? `${loopMeta.label}。${loopMeta.sonar} / ${sonarAdvisor.brief} / 艦内は方位・距離推定、グリッド報告は行わない。`
+      : `${sonarAdvisor.detail} 艦内報告は方位・距離推定を優先。`;
 
   torpedoReportDetailNode.textContent = state.torpedoSequence.selectedTargetId
     ? `報告: ${torpedoSpec.label} / ${selectedFire.label}。${selectedFire.detail}`
@@ -5962,8 +6086,8 @@ function updateHud() {
     state.battlePhase === BATTLE_PHASES.alarmDive
       ? `急速潜航。深度 ${Math.round(sub.depth)}m、潜降率を維持。`
       : state.battlePhase === BATTLE_PHASES.submergedCombat
-      ? `${loopMeta.label}。${navigationAdvisor.detail}`
-      : navigationReportDetailNode.textContent;
+      ? `${loopMeta.label}。${navigationAdvisor.detail} 艦内操艦は針路・深度、外部記録は ${state.reporting.ownGrid}。`
+      : `${navigationReportDetailNode.textContent} 外部報告座標 ${state.reporting.ownGrid}。`;
   navApproachRatingNode.textContent = `${Math.round(nav.approachRating * 100)}%`;
   navHeadingErrorNode.textContent = `${Math.round(nav.headingError)}°`;
   navDepthErrorNode.textContent = `${Math.round(nav.depthError)}m`;
@@ -6032,6 +6156,7 @@ function resetGame() {
   state.battlePhase = BATTLE_PHASES.patrol;
   state.battlePhaseEnteredAt = 0;
   initWolfpackState(stage);
+  state.reporting = createReportingState();
   state.alarmDive = createAlarmDiveState();
   syncCaptainAlarmCard();
   state.binocularAttackState = "blocked";
@@ -6147,6 +6272,8 @@ function resetGame() {
   updateDetectionState();
   updateSubmergedLoop();
   addLog(stage.introLog);
+  updateReportingState();
+  addLog(`BdU基準位置: ${state.reporting.ownGrid}。艦内報告は方位・距離、外部報告は海軍グリッドを使用。`);
   addLog(
     `持越状態: 船体 ${Math.round(state.submarine.hull)}% / 電池 ${Math.round(
       state.submarine.battery
@@ -8560,7 +8687,12 @@ function drawNavigationMainPlot() {
   ctx.fillText(gridMeta.title, insetX + 12, insetY + 38);
   ctx.font = "12px Avenir Next, Hiragino Sans, sans-serif";
   ctx.fillStyle = "#9ec1cd";
-  ctx.fillText(gridMeta.detail, insetX + 12, insetY + insetHeight - 12);
+  ctx.fillText(`自艦 ${state.reporting.ownGrid}`, insetX + 12, insetY + insetHeight - 28);
+  ctx.fillText(
+    reportFocusContactLabel(),
+    insetX + 12,
+    insetY + insetHeight - 12
+  );
   ctx.restore();
 
   ctx.fillStyle = "rgba(2, 11, 17, 0.46)";
