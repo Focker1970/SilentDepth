@@ -648,6 +648,20 @@ const SONAR_SAMPLE_FILES = {
   flagship: "audio/sonar_ship_flagship.mp3",
   convoy: "audio/sonar_ship_convoy.mp3"
 };
+const MARINE_GRID_IMAGE_FILES = {
+  atlantic: "assets/maps/grid_atlantic.gif",
+  ae: "assets/maps/grid_ae.gif"
+};
+
+function createMarineGridImages() {
+  const images = {};
+  for (const [key, src] of Object.entries(MARINE_GRID_IMAGE_FILES)) {
+    const image = new Image();
+    image.src = src;
+    images[key] = image;
+  }
+  return images;
+}
 
 const audioState = {
   context: null,
@@ -674,6 +688,7 @@ const audioState = {
 };
 
 let fallbackLoopHandle = null;
+const marineGridImages = createMarineGridImages();
 
 function drawFatalError(message) {
   if (!ctx || !canvas) return;
@@ -3583,6 +3598,12 @@ const STAGES = [
     banner: "I / 雷撃訓練",
     name: "雷撃訓練",
     zone: "訓練海面",
+    navalGrid: {
+      major: "AE",
+      title: "AE / アイスランド周辺",
+      detail: "グリーンランド・アイスランド周辺の海軍グリッド。",
+      imageKey: "ae"
+    },
     startClock: 11 * 3600 + 20 * 60,
     mission: "単独商船 1 隻を捕捉し、落ち着いて魚雷を命中させる基本訓練。",
     progress: "Stage 1 / 3",
@@ -3622,6 +3643,12 @@ const STAGES = [
     banner: "II / 駆逐艦回避",
     name: "駆逐艦回避",
     zone: "追撃回避海面",
+    navalGrid: {
+      major: "AE",
+      title: "AE / アイスランド南方",
+      detail: "AE 区画内の対潜追撃海域。",
+      imageKey: "ae"
+    },
     startClock: 17 * 3600 + 40 * 60,
     mission: "警戒中の駆逐艦 1 隻を振り切り、離脱海域へ到達せよ。雷撃より生残を優先する。",
     progress: "Stage 2 / 3",
@@ -3659,6 +3686,12 @@ const STAGES = [
     banner: "III / 船団襲撃",
     name: "船団襲撃",
     zone: "北大西洋船団航路",
+    navalGrid: {
+      major: "AM",
+      title: "AM / 北大西洋船団航路",
+      detail: "英国西方・北大西洋の主要待ち伏せ海域。",
+      imageKey: "atlantic"
+    },
     startClock: 22 * 3600 + 15 * 60,
     mission: "北大西洋のコンボイを追跡し、重要輸送船を雷撃して駆逐艦の反撃圏から離脱せよ。",
     progress: "Stage 3 / 3",
@@ -3698,6 +3731,16 @@ const STAGES = [
 
 function currentStage() {
   return STAGES[state.stageIndex] || STAGES[0];
+}
+
+function currentNavalGridMeta() {
+  const stage = currentStage();
+  return stage?.navalGrid || {
+    major: "--",
+    title: "Marinequadratkarte",
+    detail: "海軍グリッド情報なし。",
+    imageKey: "atlantic"
+  };
 }
 
 function syncStageSelect() {
@@ -5417,6 +5460,7 @@ function updateHud() {
   const phase = phaseMeta(state.battlePhase);
   const trigger = getContactTriggerMeta();
   const objective = phaseObjectiveMeta(state.battlePhase, bestShot);
+  const gridMeta = currentNavalGridMeta();
   const battleStationsLabel = !state.battleStations.active
     ? "解除"
     : state.battleStations.mode === "attack"
@@ -5477,7 +5521,7 @@ function updateHud() {
     : state.stageState.failed
       ? `${stage.progress} / 再挑戦`
       : stage.progress;
-  zoneLabelNode.textContent = stage.zone;
+  zoneLabelNode.textContent = `${stage.zone} / ${gridMeta.major}`;
   if (lightConditionNode) lightConditionNode.textContent = light.label;
   document.body.dataset.lightCondition = light.key;
 
@@ -8255,6 +8299,7 @@ function navigationPlotContacts() {
 function drawNavigationMainPlot() {
   const width = canvas.width;
   const height = canvas.height;
+  const gridMeta = currentNavalGridMeta();
   const drawNavLabel = (text, x, y, tone = "green") => {
     ctx.save();
     ctx.font = "12px Avenir Next, Hiragino Sans, sans-serif";
@@ -8482,6 +8527,41 @@ function drawNavigationMainPlot() {
       drawNavLabel("雷撃予定点", hit.x + 16, hit.y - 18, "red");
     }
   }
+
+  const insetWidth = 238;
+  const insetHeight = 166;
+  const insetX = width - insetWidth - 20;
+  const insetY = 58;
+  ctx.save();
+  ctx.fillStyle = "rgba(2, 11, 17, 0.74)";
+  ctx.strokeStyle = "rgba(141, 219, 237, 0.22)";
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  if (typeof ctx.roundRect === "function") {
+    ctx.roundRect(insetX, insetY, insetWidth, insetHeight, 12);
+  } else {
+    ctx.rect(insetX, insetY, insetWidth, insetHeight);
+  }
+  ctx.fill();
+  ctx.stroke();
+
+  const gridImage = marineGridImages[gridMeta.imageKey];
+  if (gridImage?.complete && gridImage.naturalWidth > 0) {
+    ctx.save();
+    ctx.globalAlpha = 0.86;
+    ctx.drawImage(gridImage, insetX + 10, insetY + 34, insetWidth - 20, insetHeight - 60);
+    ctx.restore();
+  }
+
+  ctx.fillStyle = "#dffaff";
+  ctx.font = "12px Avenir Next, Hiragino Sans, sans-serif";
+  ctx.fillText("Marinequadratkarte", insetX + 12, insetY + 18);
+  ctx.font = "bold 16px Avenir Next, Hiragino Sans, sans-serif";
+  ctx.fillText(gridMeta.title, insetX + 12, insetY + 38);
+  ctx.font = "12px Avenir Next, Hiragino Sans, sans-serif";
+  ctx.fillStyle = "#9ec1cd";
+  ctx.fillText(gridMeta.detail, insetX + 12, insetY + insetHeight - 12);
+  ctx.restore();
 
   ctx.fillStyle = "rgba(2, 11, 17, 0.46)";
   ctx.fillRect(18, 16, 448, 104);
