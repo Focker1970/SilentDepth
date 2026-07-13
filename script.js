@@ -8469,6 +8469,26 @@ function drawNavigationMainPlot() {
     ctx.fillText(text, left + 7, top + 14);
     ctx.restore();
   };
+  const drawInsetTextBar = (text, x, y, barWidth = 180, align = "left") => {
+    ctx.save();
+    ctx.fillStyle = "rgba(2, 11, 17, 0.84)";
+    ctx.strokeStyle = "rgba(141, 219, 237, 0.18)";
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    if (typeof ctx.roundRect === "function") {
+      ctx.roundRect(x, y - 16, barWidth, 22, 8);
+    } else {
+      ctx.rect(x, y - 16, barWidth, 22);
+    }
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = "#eafcff";
+    ctx.font = "bold 12px Avenir Next, Hiragino Sans, sans-serif";
+    ctx.textAlign = align;
+    const textX = align === "right" ? x + barWidth - 8 : x + 8;
+    ctx.fillText(text, textX, y);
+    ctx.restore();
+  };
   const prediction = navigationPlotPrediction();
   const plotContacts = navigationPlotContacts();
   const rangeSeeds = [2200, 1600];
@@ -8656,10 +8676,10 @@ function drawNavigationMainPlot() {
     }
   }
 
-  const insetWidth = 238;
-  const insetHeight = 166;
-  const insetX = width - insetWidth - 20;
-  const insetY = 58;
+  const insetWidth = 250;
+  const insetHeight = 188;
+  const insetX = 24;
+  const insetY = 138;
   ctx.save();
   ctx.fillStyle = "rgba(2, 11, 17, 0.74)";
   ctx.strokeStyle = "rgba(141, 219, 237, 0.22)";
@@ -8677,7 +8697,7 @@ function drawNavigationMainPlot() {
   if (gridImage?.complete && gridImage.naturalWidth > 0) {
     ctx.save();
     ctx.globalAlpha = 0.86;
-    ctx.drawImage(gridImage, insetX + 10, insetY + 34, insetWidth - 20, insetHeight - 60);
+    ctx.drawImage(gridImage, insetX + 10, insetY + 40, insetWidth - 20, insetHeight - 76);
     ctx.restore();
   }
 
@@ -8685,15 +8705,9 @@ function drawNavigationMainPlot() {
   ctx.font = "12px Avenir Next, Hiragino Sans, sans-serif";
   ctx.fillText("Marinequadratkarte", insetX + 12, insetY + 18);
   ctx.font = "bold 16px Avenir Next, Hiragino Sans, sans-serif";
-  ctx.fillText(gridMeta.title, insetX + 12, insetY + 38);
-  ctx.font = "12px Avenir Next, Hiragino Sans, sans-serif";
-  ctx.fillStyle = "#9ec1cd";
-  ctx.fillText(`自艦 ${state.reporting.ownGrid}`, insetX + 12, insetY + insetHeight - 28);
-  ctx.fillText(
-    reportFocusContactLabel(),
-    insetX + 12,
-    insetY + insetHeight - 12
-  );
+  ctx.fillText(gridMeta.title, insetX + 12, insetY + 34);
+  drawInsetTextBar(`自艦 ${state.reporting.ownGrid}`, insetX + 10, insetY + insetHeight - 28, insetWidth - 20);
+  drawInsetTextBar(reportFocusContactLabel(), insetX + 10, insetY + insetHeight - 4, insetWidth - 20);
   ctx.restore();
 
   ctx.fillStyle = "rgba(2, 11, 17, 0.46)";
@@ -9684,6 +9698,9 @@ function drawOpticsOverlay() {
 function render() {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
   if (state.station === "navigation") {
+    if (theatrePlotCardNode) {
+      theatrePlotCardNode.style.display = "none";
+    }
     drawNavigationMainPlot();
     return;
   }
