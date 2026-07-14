@@ -5409,8 +5409,8 @@ function enterTorpedoData() {
     state.torpedoSequence.prepStepIndex < 0;
   state.torpedoSequence.selectedTubeId = assignedTube?.id ?? null;
 
-  computeTDCSolution();
   state.tdc.targetId = shot.contact.id;
+  computeTDCSolution();
   state.torpedoSequence.dataEntered = true;
   if (!preserveTubeReady) {
     state.torpedoSequence.tubeReady = false;
