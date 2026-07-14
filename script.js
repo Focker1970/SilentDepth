@@ -920,6 +920,7 @@ const state = {
     gyroAngle: null,
     absoluteFireBearing: null,
     maxEffectiveRange: null,
+    solution: null,
     valid: false,
     suggestedSpeedKt: null,
     suggestedAob: null,
@@ -4106,6 +4107,94 @@ function computeTorpedoSolution(contact) {
   };
 }
 
+function computeManualTDCSolution(contact) {
+  const sub = state.submarine;
+  const nav = state.navigationTactical;
+  const torpedo = getActiveTorpedoSpec();
+  const tdc = state.tdc;
+  if (tdc.bearing === null || tdc.range === null || tdc.speedKt === null || tdc.aob === null) {
+    return null;
+  }
+
+  const losBearing = normalizeAngle(tdc.bearing);
+  const targetX = sub.x + Math.cos(toRadians(losBearing)) * tdc.range;
+  const targetY = sub.y + Math.sin(toRadians(losBearing)) * tdc.range;
+  const targetHeading = normalizeAngle(losBearing + 180 + tdc.aob);
+  const contactVelocityX = Math.cos(toRadians(targetHeading)) * knotsToWorldSpeed(tdc.speedKt);
+  const contactVelocityY = Math.sin(toRadians(targetHeading)) * knotsToWorldSpeed(tdc.speedKt);
+  const torpedoSpeedWorld = knotsToWorldSpeed(torpedo.speedKt);
+  const relativeX = targetX - sub.x;
+  const relativeY = targetY - sub.y;
+
+  const a =
+    contactVelocityX * contactVelocityX +
+    contactVelocityY * contactVelocityY -
+    torpedoSpeedWorld * torpedoSpeedWorld;
+  const b = 2 * (relativeX * contactVelocityX + relativeY * contactVelocityY);
+  const c = relativeX * relativeX + relativeY * relativeY;
+
+  let interceptTime = null;
+  if (Math.abs(a) < 1e-6) {
+    if (Math.abs(b) > 1e-6) {
+      const linearTime = -c / b;
+      if (linearTime > 0) interceptTime = linearTime;
+    }
+  } else {
+    const discriminant = b * b - 4 * a * c;
+    if (discriminant >= 0) {
+      const sqrt = Math.sqrt(discriminant);
+      const roots = [(-b - sqrt) / (2 * a), (-b + sqrt) / (2 * a)].filter((value) => value > 0);
+      if (roots.length) interceptTime = Math.min(...roots);
+    }
+  }
+
+  if (!interceptTime) return null;
+
+  const interceptX = targetX + contactVelocityX * interceptTime;
+  const interceptY = targetY + contactVelocityY * interceptTime;
+  const leadBearing = bearing(sub, { x: interceptX, y: interceptY });
+  const gyroAngle = normalizeAngle(leadBearing - sub.heading);
+  const bearingAngle = Math.min(Math.abs(normalizeAngle(tdc.aob)), 180 - Math.abs(normalizeAngle(tdc.aob)));
+  const maxEffectiveRange = effectiveRangeForBearing(tdc.speedKt, bearingAngle, torpedo);
+  const interceptRange = distance(sub, { x: interceptX, y: interceptY });
+  const effectiveGyroLimit = TORPEDO_GYRO_LIMIT - (1 - nav.solutionRating) * 12;
+  const effectiveRangeLimit = maxEffectiveRange * (0.82 + nav.solutionRating * 0.18);
+
+  return {
+    contact: {
+      ...contact,
+      x: targetX,
+      y: targetY,
+      heading: targetHeading,
+      speed: tdc.speedKt
+    },
+    range: tdc.range,
+    interceptTime,
+    interceptPoint: { x: interceptX, y: interceptY },
+    interceptRange,
+    leadBearing,
+    gyroAngle,
+    aspect: tdc.aob,
+    torpedoModeId: torpedo.id,
+    torpedoLabel: torpedo.label,
+    torpedoSpeedKt: torpedo.speedKt,
+    practicalRange: torpedo.practicalRange,
+    maxRange: torpedo.maxRange,
+    maxEffectiveRange,
+    practicalEffectiveRange: Math.min(maxEffectiveRange, torpedo.practicalRange),
+    bearingAngle,
+    aftShot: bearingAngle < 35,
+    solutionRating: nav.solutionRating,
+    effectiveGyroLimit,
+    shotValid:
+      tdc.range <= effectiveRangeLimit &&
+      interceptRange <= torpedo.maxRange * (0.82 + nav.solutionRating * 0.18) &&
+      Math.abs(gyroAngle) <= effectiveGyroLimit &&
+      sub.depth >= UBOAT_CLASS.torpedoDepthMin &&
+      sub.depth <= UBOAT_CLASS.torpedoDepthMax
+  };
+}
+
 function getBestTorpedoSolution() {
   return state.contacts
     .filter((contact) => !contact.destroyed)
@@ -6225,6 +6314,7 @@ function resetGame() {
     gyroAngle: null,
     absoluteFireBearing: null,
     maxEffectiveRange: null,
+    solution: null,
     valid: false,
     suggestedSpeedKt: null,
     suggestedAob: null,
@@ -6809,11 +6899,17 @@ function fireTorpedo() {
   }
 
   const usesTDC = state.tdc.valid && state.tdc.absoluteFireBearing !== null;
-  const fireHeading = usesTDC ? state.tdc.absoluteFireBearing : target.leadBearing;
-  const fireGyro = usesTDC ? state.tdc.gyroAngle : target.gyroAngle;
+  const resolvedSolution = usesTDC ? state.tdc.solution || computeManualTDCSolution(target.contact) : target;
+  if (usesTDC && !resolvedSolution) {
+    setStatus("TDC 解が不完全。方位・距離・速度・AOB を再確認してください。", "warning");
+    addLog("雷撃保留。TDC解を再構成できず。");
+    return;
+  }
+  const fireHeading = usesTDC ? state.tdc.absoluteFireBearing : resolvedSolution.leadBearing;
+  const fireGyro = usesTDC ? state.tdc.gyroAngle : resolvedSolution.gyroAngle;
   const fireLife = (usesTDC && state.tdc.range !== null)
     ? state.tdc.range / knotsToWorldSpeed(torpedo.speedKt) + 12
-    : target.interceptTime + 12;
+    : resolvedSolution.interceptTime + 12;
 
   firingTube.loaded = false;
   sub.detection = clamp(sub.detection + 0.14, 0, 1);
@@ -6844,13 +6940,13 @@ function fireTorpedo() {
     label: torpedo.label,
     targetId: target.contact.id,
     life: fireLife,
-    interceptCountdown: target.interceptTime,
-    hitChance: computeTorpedoHitChance(target, usesTDC)
+    interceptCountdown: resolvedSolution.interceptTime,
+    hitChance: computeTorpedoHitChance(resolvedSolution, usesTDC)
   });
   addLog(
     `雷撃。${torpedo.label}、管 ${firingTube.label} から ${contactLabel(target.contact)} へ進角 ${formatSigned(
-      target.gyroAngle
-    )}°、会敵 ${target.interceptTime.toFixed(1)} 秒。`
+      fireGyro
+    )}°、会敵 ${resolvedSolution.interceptTime.toFixed(1)} 秒。`
   );
   if (riskyBinocularShot) {
     addLog("危険な浮上双眼鏡発射。護衛艦の即時反応を誘発。");
@@ -9124,6 +9220,7 @@ function computeTDCSolution() {
     tdc.gyroAngle = null;
     tdc.absoluteFireBearing = null;
     tdc.maxEffectiveRange = null;
+    tdc.solution = null;
     tdc.valid = false;
     return;
   }
@@ -9132,6 +9229,7 @@ function computeTDCSolution() {
     tdc.gyroAngle = null;
     tdc.absoluteFireBearing = null;
     tdc.maxEffectiveRange = null;
+    tdc.solution = null;
     tdc.valid = false;
     return;
   }
@@ -9140,12 +9238,18 @@ function computeTDCSolution() {
   const gyroAngle = normalizeAngle(absoluteFireBearing - state.submarine.heading);
   const effectiveRatio = Math.sqrt(Math.max(0.05, 1 - sinLead * sinLead));
   const maxEffectiveRange = torpedo.maxRange * effectiveRatio;
+  const manualTarget = state.tdc.targetId
+    ? state.contacts.find((contact) => contact.id === state.tdc.targetId) || null
+    : null;
+  const manualSolution = manualTarget ? computeManualTDCSolution(manualTarget) : null;
   tdc.gyroAngle = gyroAngle;
   tdc.absoluteFireBearing = absoluteFireBearing;
   tdc.maxEffectiveRange = maxEffectiveRange;
+  tdc.solution = manualSolution;
   tdc.valid =
     Math.abs(gyroAngle) <= TORPEDO_GYRO_LIMIT &&
-    (tdc.range === null || (tdc.range <= torpedo.maxRange && tdc.range <= maxEffectiveRange));
+    (tdc.range === null || (tdc.range <= torpedo.maxRange && tdc.range <= maxEffectiveRange)) &&
+    (!manualSolution || manualSolution.shotValid);
 }
 
 function applySuggestedSpeed() {
