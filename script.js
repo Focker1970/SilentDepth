@@ -6918,8 +6918,12 @@ function fireTorpedo() {
     addLog("雷撃保留。TDC解を再構成できず。");
     return;
   }
-  const fireHeading = usesTDC ? state.tdc.absoluteFireBearing : resolvedSolution.leadBearing;
-  const fireGyro = usesTDC ? state.tdc.gyroAngle : resolvedSolution.gyroAngle;
+  const fireHeading = usesTDC
+    ? resolvedSolution.leadBearing ?? state.tdc.absoluteFireBearing
+    : resolvedSolution.leadBearing;
+  const fireGyro = usesTDC
+    ? resolvedSolution.gyroAngle ?? state.tdc.gyroAngle
+    : resolvedSolution.gyroAngle;
   const fireLife = (usesTDC && state.tdc.range !== null)
     ? state.tdc.range / knotsToWorldSpeed(torpedo.speedKt) + 12
     : resolvedSolution.interceptTime + 12;
@@ -8142,13 +8146,16 @@ function getTorpedoPreview() {
     tdc.absoluteFireBearing !== null &&
     tdc.range !== null &&
     tdc.targetId === contact.id;
+  const tdcSolution = usesTDC ? tdc.solution || computeManualTDCSolution(contact) : null;
 
   if (!shot && !usesTDC) return null;
 
   const start = { x: state.submarine.x, y: state.submarine.y };
-  const courseBearing = usesTDC ? tdc.absoluteFireBearing : shot.leadBearing;
+  const courseBearing = usesTDC
+    ? tdcSolution?.leadBearing ?? tdc.absoluteFireBearing
+    : shot.leadBearing;
   const plannedRange = usesTDC
-    ? Math.min(tdc.range, torpedo.maxRange)
+    ? Math.min(tdcSolution?.interceptRange ?? tdc.range, torpedo.maxRange)
     : Math.min(shot.interceptRange, torpedo.maxRange);
   const end = {
     x: start.x + Math.cos(toRadians(courseBearing)) * plannedRange,
@@ -8163,8 +8170,12 @@ function getTorpedoPreview() {
     plannedRange,
     start,
     end,
-    interceptPoint: shot?.interceptPoint || end,
-    gyroAngle: usesTDC ? tdc.gyroAngle : shot?.gyroAngle ?? null
+    interceptPoint: usesTDC
+      ? tdcSolution?.interceptPoint || end
+      : shot?.interceptPoint || end,
+    gyroAngle: usesTDC
+      ? tdcSolution?.gyroAngle ?? tdc.gyroAngle
+      : shot?.gyroAngle ?? null
   };
 }
 
@@ -9255,12 +9266,12 @@ function computeTDCSolution() {
     ? state.contacts.find((contact) => contact.id === state.tdc.targetId) || null
     : null;
   const manualSolution = manualTarget ? computeManualTDCSolution(manualTarget) : null;
-  tdc.gyroAngle = gyroAngle;
-  tdc.absoluteFireBearing = absoluteFireBearing;
+  tdc.gyroAngle = manualSolution?.gyroAngle ?? gyroAngle;
+  tdc.absoluteFireBearing = manualSolution?.leadBearing ?? absoluteFireBearing;
   tdc.maxEffectiveRange = maxEffectiveRange;
   tdc.solution = manualSolution;
   tdc.valid =
-    Math.abs(gyroAngle) <= TORPEDO_GYRO_LIMIT &&
+    Math.abs(tdc.gyroAngle) <= TORPEDO_GYRO_LIMIT &&
     (tdc.range === null || (tdc.range <= torpedo.maxRange && tdc.range <= maxEffectiveRange)) &&
     (!manualSolution || manualSolution.shotValid);
 }
