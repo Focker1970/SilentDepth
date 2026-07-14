@@ -174,6 +174,7 @@ const tdcAobSuggestNode = document.getElementById("tdc-aob-suggest");
 const tdcEstimateNoteNode = document.getElementById("tdc-estimate-note");
 const tdcGyroNode = document.getElementById("tdc-gyro");
 const tdcValidNode = document.getElementById("tdc-valid");
+const tdcSolutionNoteNode = document.getElementById("tdc-solution-note");
 const tdcSyncBearingButton = document.getElementById("tdc-sync-bearing");
 const tdcSyncRangeButton = document.getElementById("tdc-sync-range");
 const tdcApplySpeedButton = document.getElementById("tdc-apply-speed");
@@ -1938,7 +1939,19 @@ function silhouetteAspectMeta(contact, sub = state.submarine) {
   const aspect = normalizeAngle(contact.heading - (losBearing + 180));
   const broadside = Math.abs(Math.sin(toRadians(aspect)));
   const headingTowardViewer = Math.cos(toRadians(aspect)) > 0;
-  return { aspect, broadside, headingTowardViewer };
+  const visibleSide = aspect >= 0 ? "starboard" : "port";
+  return { aspect, broadside, headingTowardViewer, visibleSide };
+}
+
+function silhouetteBroadsideLabel(broadside) {
+  if (broadside >= 0.9) return "ほぼ真横";
+  if (broadside >= 0.68) return "横腹寄り";
+  if (broadside >= 0.42) return "斜航";
+  return "船首尾寄り";
+}
+
+function visibleSideLabel(side) {
+  return side === "starboard" ? "右舷見え" : "左舷見え";
 }
 
 function drawPeriscopeContactSilhouette(contact, px, cy, focused = false) {
@@ -9361,6 +9374,10 @@ function updateTDCEstimates() {
 
   const observed = state.observedContacts.get(contact.id);
   const visualLog = (observed?.bearingLog || []).filter((entry) => entry.visual);
+  const focusVisual =
+    (state.viewMode === "periscope" || state.viewMode === "binocular")
+      ? getPeriscopeVisuals().find((entry) => entry.id === contact.id) ?? null
+      : null;
 
   if (visualLog.length >= 2) {
     const first = visualLog[Math.max(0, visualLog.length - 4)];
@@ -9379,20 +9396,25 @@ function updateTDCEstimates() {
     }追尾 ${dt.toFixed(0)} 秒。方位変化と見かけ移動から速力推定。`;
   }
 
-  const losBearing = bearing(contact, state.submarine);
-  const aob = normalizeAngle(contact.heading - (losBearing + 180));
-  tdc.suggestedAob = Math.round(aob / 5) * 5;
-
-  if (contact.visualDetected && tdc.suggestedSpeedKt !== null) {
-    tdc.estimateNote += state.viewMode === "binocular"
-      ? " 双眼鏡視界で艦影姿勢を補正。"
-      : " 艦影の向きから AOB を補正。";
-  } else if (contact.visualDetected) {
-    tdc.estimateNote =
-      state.viewMode === "binocular"
-        ? "双眼鏡視認で AOB を推定。速度は追尾時間不足。"
-        : "艦影の向きから AOB を推定。速度は観測時間不足。";
+  if (focusVisual) {
+    const aspectMeta = silhouetteAspectMeta(contact, state.submarine);
+    const estimatedAbsAob = (Math.asin(clamp(aspectMeta.broadside, 0, 1)) * 180) / Math.PI;
+    const signedAob = aspectMeta.visibleSide === "starboard" ? estimatedAbsAob : -estimatedAbsAob;
+    tdc.suggestedAob = Math.round(signedAob / 5) * 5;
+    const silhouetteNote = `${visibleSideLabel(aspectMeta.visibleSide)} / ${silhouetteBroadsideLabel(
+      aspectMeta.broadside
+    )} / AOB ${formatSigned(Math.round(tdc.suggestedAob))}°`;
+    if (tdc.suggestedSpeedKt !== null) {
+      tdc.estimateNote += ` 艦影観測: ${silhouetteNote}。`;
+    } else {
+      tdc.estimateNote =
+        (state.viewMode === "binocular" ? "双眼鏡視認" : "潜望鏡視認") +
+        ` から AOB を推定。${silhouetteNote}。速度は観測時間不足。`;
+    }
   } else {
+    const losBearing = bearing(contact, state.submarine);
+    const aob = normalizeAngle(contact.heading - (losBearing + 180));
+    tdc.suggestedAob = Math.round(aob / 5) * 5;
     tdc.estimateNote = "視認不足。AOB は低信頼、速力は聴音接触依存。";
   }
 
@@ -9427,6 +9449,20 @@ function updateTDCDisplay() {
       (tdc.range > tdc.maxEffectiveRange || tdc.range > torpedo.maxRange);
     tdcValidNode.textContent = tdc.valid ? "発射可" : rangeInvalid ? "有効外" : tdc.gyroAngle !== null ? "範囲外" : "---";
     tdcValidNode.style.color = tdc.valid ? "#9bd9a5" : tdc.gyroAngle !== null ? "#ff8771" : "#a5c1cd";
+  }
+  if (tdcSolutionNoteNode) {
+    const solution = tdc.solution;
+    if (solution) {
+      tdcSolutionNoteNode.textContent =
+        `会敵 ${solution.interceptTime.toFixed(1)}s / 予想到達点 方位 ${formatHeading(solution.leadBearing)} / ` +
+        `会敵距離 ${Math.round(solution.interceptRange)}m / ${solution.aftShot ? "後方射点" : "前方射点"}`;
+    } else if (tdc.absoluteFireBearing !== null && tdc.range !== null) {
+      tdcSolutionNoteNode.textContent =
+        `予想到達点 方位 ${formatHeading(tdc.absoluteFireBearing)} / 距離 ${Math.round(tdc.range)}m。` +
+        ` 速度/AOB が固まると会敵時間を表示。`;
+    } else {
+      tdcSolutionNoteNode.textContent = "会敵時間と予想到達点をここに表示。";
+    }
   }
 }
 
