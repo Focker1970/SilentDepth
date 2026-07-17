@@ -345,6 +345,252 @@ h2 {
   margin-top: 12px;
 }
 
+.engine-telegraph-card {
+  margin: 14px 0 18px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+
+.engine-telegraph {
+  margin-top: 12px;
+  padding: 14px;
+  border-radius: 22px;
+  border: 1px solid rgba(139, 220, 241, 0.14);
+  background:
+    radial-gradient(circle at 50% 24%, rgba(255, 255, 255, 0.08), transparent 36%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.04), rgba(0, 0, 0, 0.12)),
+    rgba(7, 20, 29, 0.82);
+}
+
+.engine-telegraph-face {
+  position: relative;
+  aspect-ratio: 1 / 1;
+  width: min(100%, 290px);
+  margin: 0 auto;
+  border-radius: 50%;
+  border: 10px solid #17383a;
+  background:
+    radial-gradient(circle at 50% 50%, rgba(243, 239, 220, 0.96) 0 26%, transparent 26.5%),
+    radial-gradient(circle at 50% 50%, rgba(241, 235, 211, 0.98) 0 74%, rgba(192, 183, 152, 0.98) 74.5%, rgba(238, 232, 214, 0.98) 76%, rgba(18, 33, 39, 0.95) 76.5%, rgba(18, 33, 39, 0.95) 100%);
+  box-shadow:
+    inset 0 6px 18px rgba(255, 255, 255, 0.08),
+    inset 0 -8px 20px rgba(0, 0, 0, 0.24),
+    0 18px 34px rgba(0, 0, 0, 0.28);
+  overflow: hidden;
+}
+
+.engine-telegraph-shell {
+  position: absolute;
+  top: 18%;
+  left: 50%;
+  transform: translateX(-50%);
+  color: rgba(36, 56, 60, 0.78);
+  font-size: 0.72rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.engine-telegraph-arc {
+  position: absolute;
+  color: rgba(34, 44, 49, 0.84);
+  font-size: 0.9rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.engine-telegraph-arc-port {
+  top: 44%;
+  left: 10%;
+  transform: rotate(-88deg);
+  transform-origin: left top;
+}
+
+.engine-telegraph-arc-starboard {
+  top: 44%;
+  right: 10%;
+  transform: rotate(90deg);
+  transform-origin: right top;
+}
+
+.engine-telegraph-order {
+  position: absolute;
+  width: 82px;
+  min-height: 58px;
+  padding: 7px 8px;
+  border-radius: 16px;
+  border: 1px solid rgba(38, 44, 48, 0.18);
+  background: rgba(255, 250, 237, 0.6);
+  color: #1d282d;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.36);
+}
+
+.engine-telegraph-order span,
+.engine-telegraph-order strong {
+  display: block;
+  line-height: 1.1;
+}
+
+.engine-telegraph-order span {
+  font-size: 0.54rem;
+  letter-spacing: 0.05em;
+}
+
+.engine-telegraph-order strong {
+  margin-top: 4px;
+  font-size: 0.98rem;
+}
+
+.engine-order-flank {
+  top: 14%;
+  left: 12%;
+  transform: rotate(-18deg);
+}
+
+.engine-order-cruise {
+  top: 34%;
+  left: 4%;
+  transform: rotate(-8deg);
+}
+
+.engine-order-slow {
+  top: 58%;
+  left: 8%;
+  transform: rotate(8deg);
+}
+
+.engine-order-stop {
+  bottom: 6%;
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+.engine-telegraph-order.active {
+  background: linear-gradient(135deg, #ffd47b, #fff3c6);
+  box-shadow:
+    0 10px 24px rgba(255, 212, 123, 0.22),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.42);
+}
+
+.engine-telegraph-order.dim {
+  background: rgba(158, 168, 172, 0.66);
+  color: rgba(25, 31, 35, 0.76);
+}
+
+.engine-telegraph-needle {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 8px;
+  height: 38%;
+  transform-origin: 50% calc(100% - 8px);
+  transform: translate(-50%, -100%) rotate(-136deg);
+  transition: transform 240ms ease;
+  z-index: 3;
+}
+
+.engine-telegraph-needle::before {
+  content: "";
+  position: absolute;
+  left: 50%;
+  bottom: 8px;
+  transform: translateX(-50%);
+  width: 8px;
+  height: 84%;
+  clip-path: polygon(50% 0, 100% 92%, 0 92%);
+  background: linear-gradient(180deg, #1a2127, #05090d);
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.32);
+}
+
+.engine-telegraph-needle::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  bottom: 0;
+  transform: translateX(-50%);
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background:
+    radial-gradient(circle at 35% 35%, rgba(255, 255, 255, 0.24), transparent 24%),
+    #11191d;
+  border: 2px solid rgba(246, 241, 224, 0.64);
+}
+
+.engine-telegraph-center {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: 38%;
+  min-height: 38%;
+  padding: 16px 10px 12px;
+  border-radius: 50%;
+  background: rgba(24, 35, 40, 0.92);
+  color: var(--accent-2);
+  text-align: center;
+  box-shadow:
+    inset 0 0 0 1px rgba(139, 220, 241, 0.12),
+    0 8px 22px rgba(0, 0, 0, 0.24);
+  z-index: 2;
+}
+
+.engine-telegraph-center-role {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.66rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.engine-telegraph-center strong {
+  display: block;
+  margin-top: 6px;
+  font-size: 1.05rem;
+}
+
+.engine-telegraph-center span {
+  display: block;
+  margin-top: 5px;
+  font-size: 0.84rem;
+  color: #d8f0f6;
+}
+
+.engine-telegraph-status {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.engine-telegraph-status > div {
+  padding: 10px 11px;
+  border-radius: 16px;
+  border: 1px solid rgba(139, 220, 241, 0.12);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.engine-telegraph-status strong {
+  display: block;
+  margin-top: 6px;
+  font-size: 0.95rem;
+}
+
+.engine-telegraph[data-propulsion="diesel"] .engine-telegraph-center {
+  background: rgba(48, 34, 21, 0.9);
+}
+
+.engine-telegraph[data-propulsion="diesel"] .engine-telegraph-center-role,
+.engine-telegraph[data-propulsion="diesel"] .engine-telegraph-status strong {
+  color: #ffe2b2;
+}
+
+.engine-telegraph[data-band="awash"] .engine-telegraph-face,
+.engine-telegraph[data-band="periscope"] .engine-telegraph-face {
+  border-color: #3d4f45;
+}
+
 .strip-card p {
   margin: 8px 0 0;
   font-size: 0.9rem;

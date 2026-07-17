@@ -308,6 +308,52 @@
             </div>
             <div class="control-card">
               <span class="label">Command Orders</span>
+              <div class="engine-telegraph-card">
+                <span class="label">Engine Telegraph</span>
+                <div class="engine-telegraph" id="engine-telegraph" data-propulsion="electric" data-band="submerged">
+                  <div class="engine-telegraph-face">
+                    <div class="engine-telegraph-shell">Hagenuk / Kiel</div>
+                    <div class="engine-telegraph-arc engine-telegraph-arc-port">Voraus</div>
+                    <div class="engine-telegraph-arc engine-telegraph-arc-starboard">Maschinen</div>
+                    <button type="button" class="engine-telegraph-order engine-order-flank" data-speed="9">
+                      <span>Äußerste</span>
+                      <strong>全速</strong>
+                    </button>
+                    <button type="button" class="engine-telegraph-order engine-order-cruise" data-speed="6">
+                      <span>Große Fahrt</span>
+                      <strong>巡航</strong>
+                    </button>
+                    <button type="button" class="engine-telegraph-order engine-order-slow" data-speed="3">
+                      <span>Langsame Fahrt</span>
+                      <strong>微速</strong>
+                    </button>
+                    <button type="button" class="engine-telegraph-order engine-order-stop" data-speed="0">
+                      <span>Stopp</span>
+                      <strong>停止</strong>
+                    </button>
+                    <div class="engine-telegraph-needle" id="engine-telegraph-needle" aria-hidden="true"></div>
+                    <div class="engine-telegraph-center">
+                      <p class="engine-telegraph-center-role" id="engine-telegraph-propulsion">E-Maschinen</p>
+                      <strong id="engine-telegraph-order-label">微速</strong>
+                      <span id="engine-telegraph-speed-label">2kt</span>
+                    </div>
+                  </div>
+                  <div class="engine-telegraph-status">
+                    <div>
+                      <span class="label">Depth Band</span>
+                      <strong id="engine-telegraph-band">潜航</strong>
+                    </div>
+                    <div>
+                      <span class="label">Mode</span>
+                      <strong id="engine-telegraph-mode">電動機</strong>
+                    </div>
+                    <div>
+                      <span class="label">State</span>
+                      <strong id="engine-telegraph-detail">放電中</strong>
+                    </div>
+                  </div>
+                </div>
+              </div>
               <div class="button-row dual">
                 <button type="button" id="captain-intent-approach">攻撃決意</button>
                 <button type="button" id="captain-intent-evade">離脱決意</button>

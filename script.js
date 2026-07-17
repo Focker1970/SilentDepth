@@ -127,6 +127,14 @@ const captainIntentSurfaceButton = document.getElementById("captain-intent-surfa
 const captainIntentDeepButton = document.getElementById("captain-intent-deep");
 const captainIntentQuietStarboardButton = document.getElementById("captain-intent-quiet-starboard");
 const captainIntentEgressButton = document.getElementById("captain-intent-egress");
+const engineTelegraphNode = document.getElementById("engine-telegraph");
+const engineTelegraphNeedleNode = document.getElementById("engine-telegraph-needle");
+const engineTelegraphPropulsionNode = document.getElementById("engine-telegraph-propulsion");
+const engineTelegraphOrderLabelNode = document.getElementById("engine-telegraph-order-label");
+const engineTelegraphSpeedLabelNode = document.getElementById("engine-telegraph-speed-label");
+const engineTelegraphBandNode = document.getElementById("engine-telegraph-band");
+const engineTelegraphModeNode = document.getElementById("engine-telegraph-mode");
+const engineTelegraphDetailNode = document.getElementById("engine-telegraph-detail");
 const surfaceAttackCardNode = document.getElementById("surface-attack-card");
 const surfaceAttackSummaryNode = document.getElementById("surface-attack-summary");
 const surfaceAttackDiveButton = document.getElementById("surface-attack-dive");
@@ -2173,6 +2181,57 @@ function depthBandLabel(sub = state.submarine) {
   if (isAwash(sub)) return "半没";
   if (isPeriscopeDepth(sub)) return "潜望鏡深度";
   return "潜航";
+}
+
+function propulsionDisplayLabel(sub = state.submarine) {
+  return isFullySurfaced(sub) ? "Diesel" : "E-Maschinen";
+}
+
+function propulsionStateDetail(sub = state.submarine) {
+  if (isFullySurfaced(sub)) {
+    return sub.targetSpeed <= 0.5 ? "充電待機" : "充電中";
+  }
+  if (sub.battery <= 0) return "電池枯渇";
+  return "放電中";
+}
+
+function engineTelegraphAngleForOrder(order) {
+  switch (order) {
+    case SPEED_ORDERS.stop:
+      return 180;
+    case SPEED_ORDERS.slow:
+      return -138;
+    case SPEED_ORDERS.cruise:
+      return -100;
+    case SPEED_ORDERS.flank:
+      return -58;
+    default:
+      return 180;
+  }
+}
+
+function updateEngineTelegraph(sub = state.submarine) {
+  if (!engineTelegraphNode) return;
+  const order = sub.speedOrder || speedOrderFromCommandValue(sub.targetSpeed);
+  const actualSpeed = sub.targetSpeed;
+  const profile = speedProfileKey(sub);
+  const propulsion = isFullySurfaced(sub) ? "diesel" : "electric";
+  engineTelegraphNode.dataset.band = profile;
+  engineTelegraphNode.dataset.propulsion = propulsion;
+  if (engineTelegraphNeedleNode) {
+    engineTelegraphNeedleNode.style.transform = `translate(-50%, -100%) rotate(${engineTelegraphAngleForOrder(order)}deg)`;
+  }
+  if (engineTelegraphPropulsionNode) engineTelegraphPropulsionNode.textContent = propulsionDisplayLabel(sub);
+  if (engineTelegraphOrderLabelNode) engineTelegraphOrderLabelNode.textContent = speedOrderLabel(order);
+  if (engineTelegraphSpeedLabelNode) {
+    engineTelegraphSpeedLabelNode.textContent = `${Math.round(actualSpeed)}kt / ${depthBandLabel(sub)}`;
+  }
+  if (engineTelegraphBandNode) engineTelegraphBandNode.textContent = depthBandLabel(sub);
+  if (engineTelegraphModeNode) engineTelegraphModeNode.textContent = propulsionModeLabel(sub);
+  if (engineTelegraphDetailNode) {
+    const chargeNote = isFullySurfaced(sub) ? ` 電池 ${Math.round(sub.battery)}%` : "";
+    engineTelegraphDetailNode.textContent = `${propulsionStateDetail(sub)}${chargeNote}`;
+  }
 }
 
 function currentPeriscopeBearing() {
@@ -5880,6 +5939,7 @@ function updateHud() {
   batteryNode.textContent = batteryLocked ? `${Math.round(sub.battery)}% / LOW` : `${Math.round(sub.battery)}%`;
   depthNode.textContent = `${Math.round(sub.depth)}m`;
   speedNode.textContent = `${sub.speed.toFixed(1)}kt`;
+  updateEngineTelegraph(sub);
   noiseNode.textContent = noiseLabel(sub.noise);
   torpedoesNode.textContent = `${loadedTubeCount(sub)}+${sub.reserveTorpedoes || 0}`;
   if (campaignTonnageNode) {
