@@ -283,6 +283,44 @@ const DEPTH_BANDS = {
   awash: 6,
   periscope: 16
 };
+const SPEED_ORDERS = {
+  stop: "stop",
+  slow: "slow",
+  cruise: "cruise",
+  flank: "flank"
+};
+const SPEED_ORDER_COMMAND_VALUES = {
+  [SPEED_ORDERS.stop]: 0,
+  [SPEED_ORDERS.slow]: 3,
+  [SPEED_ORDERS.cruise]: 6,
+  [SPEED_ORDERS.flank]: 9
+};
+const DEPTH_BAND_SPEED_TABLE = {
+  surfaced: {
+    [SPEED_ORDERS.stop]: 0,
+    [SPEED_ORDERS.slow]: 4,
+    [SPEED_ORDERS.cruise]: 9,
+    [SPEED_ORDERS.flank]: 17
+  },
+  awash: {
+    [SPEED_ORDERS.stop]: 0,
+    [SPEED_ORDERS.slow]: 2,
+    [SPEED_ORDERS.cruise]: 4,
+    [SPEED_ORDERS.flank]: 6
+  },
+  periscope: {
+    [SPEED_ORDERS.stop]: 0,
+    [SPEED_ORDERS.slow]: 2,
+    [SPEED_ORDERS.cruise]: 4,
+    [SPEED_ORDERS.flank]: 6
+  },
+  submerged: {
+    [SPEED_ORDERS.stop]: 0,
+    [SPEED_ORDERS.slow]: 2,
+    [SPEED_ORDERS.cruise]: 3,
+    [SPEED_ORDERS.flank]: 7
+  }
+};
 const MAST_HEIGHT = { escort: 14, flagship: 18, convoy: 12 };
 const MAST_K = 1600;
 const RETICLE_TICK_SPACING = 20;
@@ -988,8 +1026,9 @@ const state = {
     y: 5200,
     heading: -18,
     targetHeading: -18,
-    speed: 3,
-    targetSpeed: 3,
+    speed: 2,
+    targetSpeed: 2,
+    speedOrder: SPEED_ORDERS.slow,
     depth: 60,
     targetDepth: 60,
     hull: 100,
@@ -1032,11 +1071,84 @@ function clamp(value, min, max) {
   return Math.max(min, Math.min(max, value));
 }
 
-function speedButtonMatches(commandedSpeed, targetSpeed) {
-  if (commandedSpeed <= 0) return targetSpeed <= 0.5;
-  if (commandedSpeed <= 3) return targetSpeed > 0.5 && targetSpeed < 4.5;
-  if (commandedSpeed <= 6) return targetSpeed >= 4.5 && targetSpeed < 7.5;
-  return targetSpeed >= 7.5;
+function speedOrderFromCommandValue(value) {
+  if (value <= 0) return SPEED_ORDERS.stop;
+  if (value <= 3) return SPEED_ORDERS.slow;
+  if (value <= 6) return SPEED_ORDERS.cruise;
+  return SPEED_ORDERS.flank;
+}
+
+function speedOrderLabel(order) {
+  switch (order) {
+    case SPEED_ORDERS.stop:
+      return "停止";
+    case SPEED_ORDERS.slow:
+      return "微速";
+    case SPEED_ORDERS.cruise:
+      return "巡航";
+    case SPEED_ORDERS.flank:
+      return "全速";
+    default:
+      return "速力";
+  }
+}
+
+function speedOrderRank(order) {
+  switch (order) {
+    case SPEED_ORDERS.stop:
+      return 0;
+    case SPEED_ORDERS.slow:
+      return 1;
+    case SPEED_ORDERS.cruise:
+      return 2;
+    case SPEED_ORDERS.flank:
+      return 3;
+    default:
+      return 0;
+  }
+}
+
+function speedProfileKey(sub = state.submarine) {
+  if (isFullySurfaced(sub)) return "surfaced";
+  if (isAwash(sub)) return "awash";
+  if (isPeriscopeDepth(sub)) return "periscope";
+  return "submerged";
+}
+
+function commandedSpeedForDepth(order, sub = state.submarine) {
+  const profile = DEPTH_BAND_SPEED_TABLE[speedProfileKey(sub)] || DEPTH_BAND_SPEED_TABLE.submerged;
+  return profile[order] ?? 0;
+}
+
+function syncSubmarineTargetSpeed(sub = state.submarine) {
+  const order = sub.speedOrder || speedOrderFromCommandValue(sub.targetSpeed);
+  sub.speedOrder = order;
+  let nextTargetSpeed = commandedSpeedForDepth(order, sub);
+  if (state.alarmDive?.active && nextTargetSpeed > 0 && nextTargetSpeed < 4) {
+    nextTargetSpeed = 4;
+  }
+  if (!isFullySurfaced(sub) && sub.battery <= 0) {
+    nextTargetSpeed = Math.min(nextTargetSpeed, 2);
+  }
+  sub.targetSpeed = nextTargetSpeed;
+  return nextTargetSpeed;
+}
+
+function setSubmarineSpeedOrder(order, sub = state.submarine) {
+  sub.speedOrder = order;
+  return syncSubmarineTargetSpeed(sub);
+}
+
+function ensureMinimumSpeedOrder(minOrder, sub = state.submarine) {
+  const currentOrder = sub.speedOrder || speedOrderFromCommandValue(sub.targetSpeed);
+  if (currentOrder !== SPEED_ORDERS.stop && speedOrderRank(currentOrder) < speedOrderRank(minOrder)) {
+    sub.speedOrder = minOrder;
+  }
+  return syncSubmarineTargetSpeed(sub);
+}
+
+function speedButtonMatches(commandedSpeed, speedOrder) {
+  return speedOrderFromCommandValue(commandedSpeed) === speedOrder;
 }
 
 function batteryTooLowForSubmergedPropulsion(sub = state.submarine) {
@@ -2975,7 +3087,7 @@ function startAlarmDive(reason = "enemy_contact", autoTriggered = false) {
   state.silentRunning = false;
   state.submarine.targetDepth = Math.max(state.submarine.targetDepth, 120);
   if (state.submarine.targetSpeed > 0) {
-    state.submarine.targetSpeed = Math.max(state.submarine.targetSpeed, 4);
+    ensureMinimumSpeedOrder(SPEED_ORDERS.cruise, state.submarine);
   }
   state.battlePhase = BATTLE_PHASES.alarmDive;
   state.battlePhaseEnteredAt = state.time;
@@ -3005,7 +3117,7 @@ function completeAlarmTask(taskKey) {
   addLog(`${task.role}: ${task.label} 完了。`);
 
   if (taskKey === "engines" && state.submarine.targetSpeed > 0) {
-    state.submarine.targetSpeed = 4;
+    ensureMinimumSpeedOrder(SPEED_ORDERS.cruise, state.submarine);
   }
   if (taskKey === "ballast" || taskKey === "planes") {
     state.submarine.targetDepth = Math.max(state.submarine.targetDepth, 140);
@@ -3093,7 +3205,7 @@ function standDownToPatrol(source = "manual") {
   state.silentRunning = false;
   clearBattleStations();
   state.submarine.targetDepth = 60;
-  state.submarine.targetSpeed = 3;
+  setSubmarineSpeedOrder(SPEED_ORDERS.slow, state.submarine);
   state.battlePhase = BATTLE_PHASES.patrol;
   state.battlePhaseEnteredAt = state.time;
   setCommandState({
@@ -3243,7 +3355,7 @@ function resolvePostAttackDecision(decision) {
     };
     state.viewMode = "binocular";
     state.submarine.targetDepth = 0;
-    state.submarine.targetSpeed = 9;
+    setSubmarineSpeedOrder(SPEED_ORDERS.flank, state.submarine);
     setCommandState({
       captainOrder: "艦長命令: 水上全速離脱",
       priorityLabel: "緊急",
@@ -3282,7 +3394,7 @@ function updateAlarmDive(deltaTime) {
   state.viewMode = "normal";
   state.submarine.targetDepth = Math.max(state.submarine.targetDepth, 120);
   if (state.submarine.targetSpeed > 0) {
-    state.submarine.targetSpeed = Math.max(state.submarine.targetSpeed, 4);
+    ensureMinimumSpeedOrder(SPEED_ORDERS.cruise, state.submarine);
   }
 
   if (state.alarmDive.triggeredAutomatically) {
@@ -3655,8 +3767,9 @@ const STAGES = [
           y: 4700,
           heading: -12,
           targetHeading: -12,
-          speed: 3,
-          targetSpeed: 3,
+          speed: 4,
+          targetSpeed: 4,
+          speedOrder: SPEED_ORDERS.cruise,
           depth: 15,
           targetDepth: 15
         },
@@ -3700,8 +3813,9 @@ const STAGES = [
           y: 5600,
           heading: -25,
           targetHeading: -25,
-          speed: 6,
-          targetSpeed: 6,
+          speed: 3,
+          targetSpeed: 3,
+          speedOrder: SPEED_ORDERS.cruise,
           depth: 60,
           targetDepth: 60,
           detection: 0.38
@@ -3743,8 +3857,9 @@ const STAGES = [
           y: 5200,
           heading: -18,
           targetHeading: -18,
-          speed: 3,
-          targetSpeed: 3,
+          speed: 2,
+          targetSpeed: 2,
+          speedOrder: SPEED_ORDERS.slow,
           depth: 60,
           targetDepth: 60,
           detection: 0.1
@@ -5003,7 +5118,7 @@ function updateButtons() {
   for (const button of speedButtons) {
     const commandedSpeed = Number(button.dataset.speed);
     const disabledForBattery = batteryLocked && commandedSpeed > 0;
-    button.classList.toggle("active", speedButtonMatches(commandedSpeed, state.submarine.targetSpeed));
+    button.classList.toggle("active", speedButtonMatches(commandedSpeed, state.submarine.speedOrder));
     button.classList.toggle("dim", disabledForBattery);
     button.disabled = disabledForBattery;
     button.title = disabledForBattery ? "Battery too low - 浮上して充電せよ" : "";
@@ -6358,8 +6473,9 @@ function resetGame() {
     y: 5200,
     heading: -18,
     targetHeading: -18,
-    speed: 3,
-    targetSpeed: 3,
+    speed: 2,
+    targetSpeed: 2,
+    speedOrder: SPEED_ORDERS.slow,
     depth: 60,
     targetDepth: 60,
     hull: 100,
@@ -6373,6 +6489,8 @@ function resetGame() {
     torpedoTubes: cloneTubeBank(sortieSubmarine.torpedoTubes || createTorpedoTubeBank()),
     reserveTorpedoes: sortieSubmarine.reserveTorpedoes ?? 9
   };
+  syncSubmarineTargetSpeed(state.submarine);
+  state.submarine.speed = state.submarine.targetSpeed;
   const visibleWorldWidth = canvas.width / TACTICAL_PLOT_SCALE;
   const visibleWorldHeight = canvas.height / TACTICAL_PLOT_SCALE;
   state.plotCamera = {
@@ -6499,22 +6617,21 @@ function commandSpeed(value) {
     updateHud();
     return;
   }
-  if (state.alarmDive.active && value > 0 && value < 4) {
-    value = 4;
-  }
-  state.submarine.targetSpeed = value;
-  if (state.silentRunning && value > 4) {
+  const speedOrder = speedOrderFromCommandValue(value);
+  const actualSpeed = setSubmarineSpeedOrder(speedOrder);
+  if (state.silentRunning && actualSpeed > 4) {
     state.silentRunning = false;
     addLog("静粛航行を解除。");
+    syncSubmarineTargetSpeed();
   }
-  const stopOrder = value <= 0;
+  const stopOrder = speedOrder === SPEED_ORDERS.stop;
   const alarmStopOrder = stopOrder && state.alarmDive.active;
   setCommandState({
-    captainOrder: stopOrder ? "艦長命令: 機関停止" : `艦長命令: 速力 ${value} ノット`,
-    priorityLabel: alarmStopOrder ? "緊急" : value >= 6 ? "警戒" : "通常",
-    priorityTone: alarmStopOrder ? "critical" : value >= 6 ? "high" : "normal",
-    navigation: stopOrder ? "機関停止、惰性を監視" : `機関 ${value} ノットへ調整`,
-    sonar: stopOrder ? "自艦騒音低下を利用し聴音強化" : value >= 6 ? "自艦騒音増大を補正監視" : "静粛接近を支援"
+    captainOrder: stopOrder ? "艦長命令: 機関停止" : `艦長命令: ${speedOrderLabel(speedOrder)} ${actualSpeed.toFixed(0)}kt`,
+    priorityLabel: alarmStopOrder ? "緊急" : actualSpeed >= 6 ? "警戒" : "通常",
+    priorityTone: alarmStopOrder ? "critical" : actualSpeed >= 6 ? "high" : "normal",
+    navigation: stopOrder ? "機関停止、惰性を監視" : `${speedOrderLabel(speedOrder)} ${actualSpeed.toFixed(0)}kt へ調整`,
+    sonar: stopOrder ? "自艦騒音低下を利用し聴音強化" : actualSpeed >= 6 ? "自艦騒音増大を補正監視" : "静粛接近を支援"
   });
   emitSpeedVoice(value);
   if (alarmStopOrder) {
@@ -6524,8 +6641,8 @@ function commandSpeed(value) {
     addLog("艦長命令: 機関停止。");
     setStatus("機関停止を命令。惰性航走へ移る。");
   } else {
-    addLog(`速力変更。目標 ${value} ノット。`);
-    setStatus(`速力を ${value} ノットへ調整中。`);
+    addLog(`速力変更。${speedOrderLabel(speedOrder)} ${actualSpeed.toFixed(0)}kt。`);
+    setStatus(`${depthBandLabel(state.submarine)} の ${speedOrderLabel(speedOrder)} ${actualSpeed.toFixed(0)}kt へ調整中。`);
   }
   updateButtons();
   updateHud();
@@ -6655,7 +6772,7 @@ function issueCaptainIntent(intent) {
 
   switch (intent) {
     case "approach":
-      sub.targetSpeed = 3;
+      setSubmarineSpeedOrder(SPEED_ORDERS.slow, sub);
       sub.targetDepth = 60;
       setSilentRunningDirect(true);
       setCommandState({
@@ -6672,7 +6789,7 @@ function issueCaptainIntent(intent) {
       setStatus("攻撃決意。航海長へ射点誘導を下令。");
       break;
     case "evade":
-      sub.targetSpeed = 3;
+      setSubmarineSpeedOrder(SPEED_ORDERS.slow, sub);
       sub.targetDepth = 140;
       setSilentRunningDirect(true);
       state.voiceRuntime.lastDepthReachedTarget = null;
@@ -6690,7 +6807,7 @@ function issueCaptainIntent(intent) {
       setStatus("離脱決意。航海長へ最適離脱位置への誘導を下令。", "warning");
       break;
     case "periscope":
-      sub.targetSpeed = 3;
+      setSubmarineSpeedOrder(SPEED_ORDERS.slow, sub);
       sub.targetDepth = Math.max(15, UBOAT_CLASS.torpedoDepthMin);
       setSilentRunningDirect(true);
       state.voiceRuntime.lastDepthReachedTarget = null;
@@ -6708,7 +6825,7 @@ function issueCaptainIntent(intent) {
       setStatus("潜望鏡深度へ。航海長が観測位置を調整。");
       break;
     case "surface":
-      sub.targetSpeed = 3;
+      setSubmarineSpeedOrder(SPEED_ORDERS.slow, sub);
       sub.targetDepth = 0;
       setSilentRunningDirect(false);
       state.voiceRuntime.lastDepthReachedTarget = null;
@@ -6725,7 +6842,7 @@ function issueCaptainIntent(intent) {
       setStatus("浮上命令。艦橋使用とディーゼル復帰の準備。", "warning");
       break;
     case "deep":
-      sub.targetSpeed = 6;
+      setSubmarineSpeedOrder(SPEED_ORDERS.cruise, sub);
       sub.targetDepth = deepDepth;
       setSilentRunningDirect(false);
       state.voiceRuntime.lastDepthReachedTarget = null;
@@ -6743,7 +6860,7 @@ function issueCaptainIntent(intent) {
       setStatus("深深度退避。航海長へ圧力限界手前までの潜航を下令。", "bad");
       break;
     case "quiet_starboard":
-      sub.targetSpeed = 3;
+      setSubmarineSpeedOrder(SPEED_ORDERS.slow, sub);
       sub.targetDepth = Math.max(sub.targetDepth, 60);
       sub.targetHeading = normalizeAngle(sub.targetHeading + 25);
       setSilentRunningDirect(true);
@@ -6762,7 +6879,7 @@ function issueCaptainIntent(intent) {
       setStatus("静かな右回避。航海長へ小回頭を下令。", "warning");
       break;
     case "egress":
-      sub.targetSpeed = 9;
+      setSubmarineSpeedOrder(SPEED_ORDERS.flank, sub);
       sub.targetDepth = Math.max(sub.targetDepth, 60);
       setSilentRunningDirect(false);
       setCommandState({
@@ -6796,7 +6913,7 @@ function toggleSilent() {
 
   state.silentRunning = !state.silentRunning;
   if (state.silentRunning && state.submarine.targetSpeed > 4) {
-    state.submarine.targetSpeed = 3;
+    setSubmarineSpeedOrder(SPEED_ORDERS.slow, state.submarine);
   }
   setCommandState({
     captainOrder: state.silentRunning ? "艦長命令: 静粛航行" : "艦長命令: 通常航行",
@@ -7004,6 +7121,7 @@ function fireTorpedo() {
 function updateSubmarine(deltaTime) {
   const sub = state.submarine;
   const nav = state.navigationTactical;
+  syncSubmarineTargetSpeed(sub);
   const fullySurfaced = isFullySurfaced(sub);
   const awash = isAwash(sub);
   const surfaced = fullySurfaced;
@@ -7110,7 +7228,7 @@ function updateSubmarine(deltaTime) {
   }
 
   if (!surfaced && sub.battery <= 0) {
-    sub.targetSpeed = Math.min(sub.targetSpeed, 2);
+    syncSubmarineTargetSpeed(sub);
     setStatus("Battery too low。潜航中は出力不足。浮上してディーゼル充電せよ。", "bad");
   }
 
