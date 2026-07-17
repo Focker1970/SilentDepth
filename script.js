@@ -2184,7 +2184,7 @@ function depthBandLabel(sub = state.submarine) {
 }
 
 function propulsionDisplayLabel(sub = state.submarine) {
-  return isFullySurfaced(sub) ? "Diesel" : "E-Maschinen";
+  return isFullySurfaced(sub) ? "Diesel" : "E-Masch.";
 }
 
 function propulsionStateDetail(sub = state.submarine) {
@@ -2224,7 +2224,7 @@ function updateEngineTelegraph(sub = state.submarine) {
   if (engineTelegraphPropulsionNode) engineTelegraphPropulsionNode.textContent = propulsionDisplayLabel(sub);
   if (engineTelegraphOrderLabelNode) engineTelegraphOrderLabelNode.textContent = speedOrderLabel(order);
   if (engineTelegraphSpeedLabelNode) {
-    engineTelegraphSpeedLabelNode.textContent = `${Math.round(actualSpeed)}kt / ${depthBandLabel(sub)}`;
+    engineTelegraphSpeedLabelNode.textContent = `${Math.round(actualSpeed)}kt`;
   }
   if (engineTelegraphBandNode) engineTelegraphBandNode.textContent = depthBandLabel(sub);
   if (engineTelegraphModeNode) engineTelegraphModeNode.textContent = propulsionModeLabel(sub);
