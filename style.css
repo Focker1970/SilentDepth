@@ -369,118 +369,65 @@ h2 {
   width: min(100%, 290px);
   margin: 0 auto;
   border-radius: 50%;
-  border: 10px solid #17383a;
-  background:
-    radial-gradient(circle at 50% 50%, rgba(243, 239, 220, 0.96) 0 22%, transparent 22.5%),
-    radial-gradient(circle at 50% 50%, rgba(241, 235, 211, 0.98) 0 76%, rgba(192, 183, 152, 0.98) 76.5%, rgba(238, 232, 214, 0.98) 78%, rgba(18, 33, 39, 0.95) 78.5%, rgba(18, 33, 39, 0.95) 100%);
+  border-radius: 50%;
   box-shadow:
-    inset 0 6px 18px rgba(255, 255, 255, 0.08),
-    inset 0 -8px 20px rgba(0, 0, 0, 0.24),
     0 18px 34px rgba(0, 0, 0, 0.28);
   overflow: hidden;
 }
 
-.engine-telegraph-shell {
-  position: absolute;
-  top: 14%;
-  left: 50%;
-  transform: translateX(-50%);
-  color: rgba(36, 56, 60, 0.78);
-  font-size: 0.66rem;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  white-space: nowrap;
-}
-
-.engine-telegraph-arc {
-  position: absolute;
-  color: rgba(34, 44, 49, 0.84);
-  font-size: 0.82rem;
-  font-weight: 700;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-}
-
-.engine-telegraph-arc-port {
-  top: 48%;
-  left: 8%;
-  transform: rotate(-88deg);
-  transform-origin: left top;
-}
-
-.engine-telegraph-arc-starboard {
-  top: 47%;
-  right: 8%;
-  transform: rotate(90deg);
-  transform-origin: right top;
-}
-
-.engine-telegraph-order {
-  position: absolute;
-  width: 72px;
-  min-height: 42px;
-  padding: 2px 4px;
-  border-radius: 999px;
-  border: 1px solid transparent;
-  background: transparent;
-  color: #1d282d;
-  box-shadow: none;
-  text-align: center;
-}
-
-.engine-telegraph-order span,
-.engine-telegraph-order strong {
+.engine-telegraph-image {
   display: block;
-  line-height: 1.05;
-  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.58);
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  border-radius: 50%;
 }
 
-.engine-telegraph-order span {
-  font-size: 0.48rem;
-  letter-spacing: 0.05em;
+.engine-telegraph-hit {
+  position: absolute;
+  padding: 0;
+  border-radius: 999px;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  opacity: 0;
 }
 
-.engine-telegraph-order strong {
-  margin-top: 2px;
-  font-size: 0.82rem;
+.engine-telegraph-hit:hover,
+.engine-telegraph-hit:focus-visible {
+  opacity: 1;
+  outline: none;
+  box-shadow: inset 0 0 0 2px rgba(255, 212, 123, 0.5);
+  background: rgba(255, 212, 123, 0.12);
 }
 
-.engine-order-flank {
-  top: 17%;
-  left: 10%;
-  transform: rotate(-20deg);
+.engine-hit-flank {
+  top: 16%;
+  left: 11%;
+  width: 31%;
+  height: 14%;
 }
 
-.engine-order-cruise {
-  top: 37%;
-  left: 2%;
-  transform: rotate(-10deg);
+.engine-hit-cruise {
+  top: 33%;
+  left: 7%;
+  width: 35%;
+  height: 14%;
 }
 
-.engine-order-slow {
-  top: 61%;
-  left: 4%;
-  transform: rotate(7deg);
+.engine-hit-slow {
+  top: 52%;
+  left: 9%;
+  width: 32%;
+  height: 14%;
 }
 
-.engine-order-stop {
+.engine-hit-stop {
   bottom: 6%;
   left: 50%;
   transform: translateX(-50%);
-  width: 84px;
-}
-
-.engine-telegraph-order.active {
-  background: linear-gradient(135deg, rgba(255, 212, 123, 0.92), rgba(255, 243, 198, 0.92));
-  border-color: rgba(121, 86, 20, 0.2);
-  box-shadow:
-    0 8px 18px rgba(255, 212, 123, 0.18),
-    inset 0 0 0 1px rgba(255, 255, 255, 0.34);
-}
-
-.engine-telegraph-order.dim {
-  background: rgba(158, 168, 172, 0.26);
-  color: rgba(25, 31, 35, 0.76);
+  width: 28%;
+  height: 12%;
 }
 
 .engine-telegraph-needle {
@@ -488,7 +435,7 @@ h2 {
   left: 50%;
   top: 50%;
   width: 8px;
-  height: 38%;
+  height: 40%;
   transform-origin: 50% calc(100% - 8px);
   transform: translate(-50%, -100%) rotate(-136deg);
   transition: transform 240ms ease;
@@ -502,7 +449,7 @@ h2 {
   bottom: 8px;
   transform: translateX(-50%);
   width: 8px;
-  height: 84%;
+  height: 88%;
   clip-path: polygon(50% 0, 100% 92%, 0 92%);
   background: linear-gradient(180deg, #1a2127, #05090d);
   box-shadow: 0 4px 10px rgba(0, 0, 0, 0.32);
@@ -579,21 +526,11 @@ h2 {
 .engine-telegraph-status strong {
   display: block;
   margin-top: 6px;
-  font-size: 0.95rem;
+  font-size: 0.88rem;
 }
 
-.engine-telegraph[data-propulsion="diesel"] .engine-telegraph-center {
-  background: rgba(48, 34, 21, 0.9);
-}
-
-.engine-telegraph[data-propulsion="diesel"] .engine-telegraph-center-role,
 .engine-telegraph[data-propulsion="diesel"] .engine-telegraph-status strong {
   color: #ffe2b2;
-}
-
-.engine-telegraph[data-band="awash"] .engine-telegraph-face,
-.engine-telegraph[data-band="periscope"] .engine-telegraph-face {
-  border-color: #3d4f45;
 }
 
 .strip-card p {
