@@ -4360,15 +4360,28 @@ function computeManualTDCSolution(contact) {
     return null;
   }
 
-  const losBearing = normalizeAngle(tdc.bearing);
-  const targetX = sub.x + Math.cos(toRadians(losBearing)) * tdc.range;
-  const targetY = sub.y + Math.sin(toRadians(losBearing)) * tdc.range;
-  const targetHeading = normalizeAngle(losBearing + 180 + tdc.aob);
+  const observationPoint = { x: sub.x, y: sub.y };
+  const launchPoint = tdc.tubeOffsetWorld || getTubeWorldPosition(tdc.tubeId, sub) || {
+    x: sub.x,
+    y: sub.y,
+    tubeId: null,
+    localX: 0,
+    localY: 0,
+    facing: sub.heading,
+    arc: "bow"
+  };
+  const rawBearing = normalizeAngle(tdc.bearing);
+  const rawRange = tdc.range;
+  const targetX = observationPoint.x + Math.cos(toRadians(rawBearing)) * rawRange;
+  const targetY = observationPoint.y + Math.sin(toRadians(rawBearing)) * rawRange;
+  const targetHeading = normalizeAngle(rawBearing + 180 + tdc.aob);
+  const parallaxBearing = bearing(launchPoint, { x: targetX, y: targetY });
+  const parallaxRange = distance(launchPoint, { x: targetX, y: targetY });
   const contactVelocityX = Math.cos(toRadians(targetHeading)) * knotsToWorldSpeed(tdc.speedKt);
   const contactVelocityY = Math.sin(toRadians(targetHeading)) * knotsToWorldSpeed(tdc.speedKt);
   const torpedoSpeedWorld = knotsToWorldSpeed(torpedo.speedKt);
-  const relativeX = targetX - sub.x;
-  const relativeY = targetY - sub.y;
+  const relativeX = targetX - launchPoint.x;
+  const relativeY = targetY - launchPoint.y;
 
   const a =
     contactVelocityX * contactVelocityX +
@@ -4396,11 +4409,11 @@ function computeManualTDCSolution(contact) {
 
   const interceptX = targetX + contactVelocityX * interceptTime;
   const interceptY = targetY + contactVelocityY * interceptTime;
-  const leadBearing = bearing(sub, { x: interceptX, y: interceptY });
+  const leadBearing = bearing(launchPoint, { x: interceptX, y: interceptY });
   const gyroAngle = normalizeAngle(leadBearing - sub.heading);
   const bearingAngle = Math.min(Math.abs(normalizeAngle(tdc.aob)), 180 - Math.abs(normalizeAngle(tdc.aob)));
   const maxEffectiveRange = effectiveRangeForBearing(tdc.speedKt, bearingAngle, torpedo);
-  const interceptRange = distance(sub, { x: interceptX, y: interceptY });
+  const interceptRange = distance(launchPoint, { x: interceptX, y: interceptY });
   const effectiveGyroLimit = TORPEDO_GYRO_LIMIT - (1 - nav.solutionRating) * 12;
   const effectiveRangeLimit = maxEffectiveRange * (0.82 + nav.solutionRating * 0.18);
 
@@ -4412,7 +4425,14 @@ function computeManualTDCSolution(contact) {
       heading: targetHeading,
       speed: tdc.speedKt
     },
-    range: tdc.range,
+    range: rawRange,
+    rawBearing,
+    rawRange,
+    observationPoint,
+    launchPoint,
+    tubeId: launchPoint.tubeId,
+    parallaxBearing,
+    parallaxRange,
     interceptTime,
     interceptPoint: { x: interceptX, y: interceptY },
     interceptRange,
@@ -4431,7 +4451,7 @@ function computeManualTDCSolution(contact) {
     solutionRating: nav.solutionRating,
     effectiveGyroLimit,
     shotValid:
-      tdc.range <= effectiveRangeLimit &&
+      parallaxRange <= effectiveRangeLimit &&
       interceptRange <= torpedo.maxRange * (0.82 + nav.solutionRating * 0.18) &&
       Math.abs(gyroAngle) <= effectiveGyroLimit &&
       sub.depth >= UBOAT_CLASS.torpedoDepthMin &&
@@ -6346,7 +6366,11 @@ function updateHud() {
   torpedoReportDetailNode.textContent = state.torpedoSequence.selectedTargetId
     ? `報告: ${torpedoSpec.label} / ${selectedFire.label}。${selectedFire.detail} / ${formatTubeGeometrySummary(
         state.torpedoSequence.selectedTubeId
-      )}`
+      )}${
+        state.tdc.parallaxBearing !== null && state.tdc.parallaxRange !== null
+          ? ` / 視差補正 ${formatHeading(state.tdc.parallaxBearing)} ${Math.round(state.tdc.parallaxRange)}m`
+          : ""
+      }`
     : state.viewMode === "binocular" && binocularFocus
       ? `報告: 双眼鏡で ${contactLabel(binocularFocus)} を捕捉。方位 ${Math.round(
           normalizeAngle(bearing(sub, binocularFocus) - sub.heading)
@@ -7148,8 +7172,14 @@ function fireTorpedo() {
   const fireGyro = usesTDC
     ? resolvedSolution.gyroAngle ?? state.tdc.gyroAngle
     : resolvedSolution.gyroAngle;
+  const launchPoint =
+    resolvedSolution.launchPoint ||
+    getTubeWorldPosition(firingTube?.id, sub) || {
+      x: sub.x,
+      y: sub.y
+    };
   const fireLife = (usesTDC && state.tdc.range !== null)
-    ? state.tdc.range / knotsToWorldSpeed(torpedo.speedKt) + 12
+    ? (state.tdc.parallaxRange ?? state.tdc.range) / knotsToWorldSpeed(torpedo.speedKt) + 12
     : resolvedSolution.interceptTime + 12;
 
   firingTube.loaded = false;
@@ -7171,8 +7201,8 @@ function fireTorpedo() {
 
   state.torpedoesInWater.push({
     id: `torpedo-${Math.random().toString(16).slice(2)}`,
-    x: sub.x,
-    y: sub.y,
+    x: launchPoint.x,
+    y: launchPoint.y,
     heading: fireHeading,
     speed: knotsToWorldSpeed(torpedo.speedKt),
     traveled: 0,
@@ -9472,6 +9502,8 @@ function computeTDCSolution() {
     tdc.maxEffectiveRange = null;
     tdc.solution = null;
     tdc.valid = false;
+    tdc.parallaxBearing = null;
+    tdc.parallaxRange = null;
     return;
   }
   const sinLead = (tdc.speedKt / torpedo.speedKt) * Math.sin(toRadians(tdc.aob));
@@ -9481,6 +9513,8 @@ function computeTDCSolution() {
     tdc.maxEffectiveRange = null;
     tdc.solution = null;
     tdc.valid = false;
+    tdc.parallaxBearing = null;
+    tdc.parallaxRange = null;
     return;
   }
   const leadAngle = (Math.asin(sinLead) * 180) / Math.PI;
@@ -9494,11 +9528,15 @@ function computeTDCSolution() {
   const manualSolution = manualTarget ? computeManualTDCSolution(manualTarget) : null;
   tdc.gyroAngle = manualSolution?.gyroAngle ?? gyroAngle;
   tdc.absoluteFireBearing = manualSolution?.leadBearing ?? absoluteFireBearing;
-  tdc.maxEffectiveRange = maxEffectiveRange;
+  tdc.maxEffectiveRange = manualSolution?.maxEffectiveRange ?? maxEffectiveRange;
   tdc.solution = manualSolution;
+  tdc.parallaxBearing = manualSolution?.parallaxBearing ?? null;
+  tdc.parallaxRange = manualSolution?.parallaxRange ?? null;
   tdc.valid =
     Math.abs(tdc.gyroAngle) <= TORPEDO_GYRO_LIMIT &&
-    (tdc.range === null || (tdc.range <= torpedo.maxRange && tdc.range <= maxEffectiveRange)) &&
+    ((manualSolution?.parallaxRange ?? tdc.range) === null ||
+      ((manualSolution?.parallaxRange ?? tdc.range) <= torpedo.maxRange &&
+        (manualSolution?.parallaxRange ?? tdc.range) <= (manualSolution?.maxEffectiveRange ?? maxEffectiveRange))) &&
     (!manualSolution || manualSolution.shotValid);
 }
 
@@ -9678,14 +9716,19 @@ function updateTDCDisplay() {
   if (tdcEstimateNoteNode) {
     tdcEstimateNoteNode.textContent = `${torpedo.label} ${torpedo.speedKt}kt / 実用${torpedo.practicalRange}m${
       tdc.maxEffectiveRange !== null ? ` / 有効${Math.round(tdc.maxEffectiveRange)}m` : ""
-    }。 ${tdc.estimateNote}`;
+    }。 ${tdc.estimateNote}${
+      tdc.parallaxBearing !== null && tdc.parallaxRange !== null
+        ? ` 視差補正 方位 ${formatHeading(tdc.parallaxBearing)} / 距離 ${Math.round(tdc.parallaxRange)}m。`
+        : ""
+    }`;
   }
   if (tdcGyroNode) tdcGyroNode.textContent = tdc.gyroAngle !== null ? formatSigned(Math.round(tdc.gyroAngle)) : "---";
   if (tdcValidNode) {
     const rangeInvalid =
-      tdc.range !== null &&
+      (tdc.parallaxRange ?? tdc.range) !== null &&
       tdc.maxEffectiveRange !== null &&
-      (tdc.range > tdc.maxEffectiveRange || tdc.range > torpedo.maxRange);
+      ((tdc.parallaxRange ?? tdc.range) > tdc.maxEffectiveRange ||
+        (tdc.parallaxRange ?? tdc.range) > torpedo.maxRange);
     tdcValidNode.textContent = tdc.valid ? "発射可" : rangeInvalid ? "有効外" : tdc.gyroAngle !== null ? "範囲外" : "---";
     tdcValidNode.style.color = tdc.valid ? "#9bd9a5" : tdc.gyroAngle !== null ? "#ff8771" : "#a5c1cd";
   }
@@ -9693,6 +9736,8 @@ function updateTDCDisplay() {
     const solution = tdc.solution;
     if (solution) {
       tdcSolutionNoteNode.textContent =
+        `観測 方位 ${formatHeading(solution.rawBearing)} / 距離 ${Math.round(solution.rawRange)}m / ` +
+        `補正 方位 ${formatHeading(solution.parallaxBearing)} / 距離 ${Math.round(solution.parallaxRange)}m / ` +
         `会敵 ${solution.interceptTime.toFixed(1)}s / 予想到達点 方位 ${formatHeading(solution.leadBearing)} / ` +
         `会敵距離 ${Math.round(solution.interceptRange)}m / ${solution.aftShot ? "後方射点" : "前方射点"} / ${formatTubeGeometrySummary()}`;
     } else if (tdc.absoluteFireBearing !== null && tdc.range !== null) {
