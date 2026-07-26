@@ -2488,6 +2488,90 @@ function buildSalvoPreviewPaths(preview) {
   });
 }
 
+function buildFirePlan(target, resolvedSolution, usesTDC, torpedo) {
+  const shotCount = plannedSalvoShotCount();
+  const singleTube = findTubeById(state.torpedoSequence.selectedTubeId, state.submarine);
+  if (!target || !resolvedSolution || !torpedo) return [];
+  if (shotCount <= 1) {
+    const launchPoint =
+      resolvedSolution.launchPoint ||
+      getTubeWorldPosition(singleTube?.id, state.submarine) || {
+        x: state.submarine.x,
+        y: state.submarine.y,
+        facing: state.submarine.heading
+      };
+    const fireHeading = usesTDC
+      ? resolvedSolution.leadBearing ?? state.tdc.absoluteFireBearing
+      : resolvedSolution.leadBearing;
+    const fireGyro = usesTDC
+      ? resolvedSolution.gyroAngle ?? state.tdc.gyroAngle
+      : resolvedSolution.gyroAngle;
+    const fireLife = (usesTDC && state.tdc.range !== null)
+      ? (resolvedSolution.runDistanceEstimate ?? (state.tdc.parallaxRange ?? state.tdc.range)) /
+          knotsToWorldSpeed(torpedo.speedKt) +
+        12
+      : (resolvedSolution.runDistanceEstimate ?? resolvedSolution.interceptRange) /
+          Math.max(0.1, knotsToWorldSpeed(torpedo.speedKt)) +
+        12;
+    return [{
+      tube: singleTube,
+      fireHeading,
+      fireGyro,
+      launchPoint,
+      fireLife,
+      interceptCountdown: resolvedSolution.interceptTime,
+      hitChance: computeTorpedoHitChance(resolvedSolution, usesTDC),
+      solution: resolvedSolution
+    }];
+  }
+
+  const preview = {
+    contact: target.contact,
+    activeSolution: resolvedSolution,
+    start: resolvedSolution.launchPoint || getTubeWorldPosition(singleTube?.id, state.submarine) || {
+      x: state.submarine.x,
+      y: state.submarine.y,
+      facing: state.submarine.heading
+    },
+    courseBearing: usesTDC
+      ? resolvedSolution.leadBearing ?? state.tdc.absoluteFireBearing
+      : resolvedSolution.leadBearing,
+    plannedRange: Math.min(
+      resolvedSolution.interceptRange ?? resolvedSolution.parallaxRange ?? resolvedSolution.range ?? 0,
+      torpedo.maxRange
+    ),
+    runDistance: Math.min(
+      resolvedSolution.runDistanceEstimate ?? resolvedSolution.interceptRange ?? torpedo.maxRange,
+      torpedo.maxRange
+    )
+  };
+  const salvoPaths = buildSalvoPreviewPaths(preview);
+  const baseHitChance = computeTorpedoHitChance(resolvedSolution, usesTDC);
+  const torpedoSpeedWorld = Math.max(0.1, knotsToWorldSpeed(torpedo.speedKt));
+  return salvoPaths.map((path) => {
+    const fireHeading = normalizeAngle(preview.courseBearing + path.offsetDeg);
+    const fireGyro = normalizeAngle(fireHeading - state.submarine.heading);
+    const fireLife = (preview.runDistance / torpedoSpeedWorld) + 12;
+    const offsetPenalty = Math.min(0.12, Math.abs(path.offsetDeg) * 0.018);
+    return {
+      tube: path.tubeId ? findTubeById(path.tubeId, state.submarine) : null,
+      fireHeading,
+      fireGyro,
+      launchPoint: path.start,
+      fireLife,
+      interceptCountdown: preview.runDistance / torpedoSpeedWorld,
+      hitChance: Math.max(0.08, baseHitChance - offsetPenalty),
+      solution: {
+        ...resolvedSolution,
+        interceptPoint: path.interceptPoint,
+        initialStraightMeters: resolvedSolution.initialStraightMeters,
+        turnRadiusMeters: resolvedSolution.turnRadiusMeters,
+        runDistanceEstimate: preview.runDistance
+      }
+    };
+  });
+}
+
 function getCaptainDesignatedContact() {
   const designatedId = state.torpedoSequence.captainDesignatedTargetId;
   if (!designatedId) return null;
@@ -5952,6 +6036,8 @@ function selectedTorpedoFireStatus() {
   const selectedShot = getSelectedTorpedoSolution();
   const selectedTube = findTubeById(state.torpedoSequence.selectedTubeId, sub);
   const torpedo = getActiveTorpedoSpec();
+  const plannedShotCount = plannedSalvoShotCount();
+  const availableLoadedTubes = getSalvoCandidateTubes(selectedShot?.contact || null, plannedShotCount).length;
 
   if (!selectedShot) {
     return {
@@ -5992,6 +6078,14 @@ function selectedTorpedoFireStatus() {
       detail: selectedTube.loaded
         ? `発射管 ${selectedTube.label} の注水・均圧・外扉開放の完了を待つ。`
         : `発射管 ${selectedTube.label} は空。再装填と発射準備の完了を待つ。`
+    };
+  }
+
+  if (plannedShotCount > 1 && availableLoadedTubes < plannedShotCount) {
+    return {
+      ready: false,
+      label: "斉射管不足",
+      detail: `${getCaptainFirePatternLabel()} には ${plannedShotCount} 本の装填済み発射管が必要。現在 ${availableLoadedTubes} 本のみ。`
     };
   }
 
@@ -7581,7 +7675,6 @@ function fireTorpedo() {
   const sub = state.submarine;
   const torpedo = getActiveTorpedoSpec();
   const fireStatus = selectedTorpedoFireStatus();
-  const firingTube = findTubeById(state.torpedoSequence.selectedTubeId, sub);
   const riskyBinocularShot =
     state.viewMode === "binocular" && state.binocularAttackState === "risky";
   if (!state.running) return;
@@ -7610,11 +7703,6 @@ function fireTorpedo() {
     setStatus("艦長の発射許可が必要。", "warning");
     return;
   }
-  if (!firingTube?.loaded) {
-    setStatus("選択発射管が空。再装填からやり直す必要がある。", "warning");
-    return;
-  }
-
   const target = getSelectedTorpedoSolution();
 
   if (!target) {
@@ -7662,71 +7750,71 @@ function fireTorpedo() {
     addLog("雷撃保留。TDC解を再構成できず。");
     return;
   }
-  const fireHeading = usesTDC
-    ? resolvedSolution.leadBearing ?? state.tdc.absoluteFireBearing
-    : resolvedSolution.leadBearing;
-  const fireGyro = usesTDC
-    ? resolvedSolution.gyroAngle ?? state.tdc.gyroAngle
-    : resolvedSolution.gyroAngle;
-  const launchPoint =
-    resolvedSolution.launchPoint ||
-    getTubeWorldPosition(firingTube?.id, sub) || {
-      x: sub.x,
-      y: sub.y,
-      facing: sub.heading
-    };
-  const fireLife = (usesTDC && state.tdc.range !== null)
-    ? (resolvedSolution.runDistanceEstimate ?? (state.tdc.parallaxRange ?? state.tdc.range)) /
-        knotsToWorldSpeed(torpedo.speedKt) +
-      12
-    : (resolvedSolution.runDistanceEstimate ?? resolvedSolution.interceptRange) /
-        Math.max(0.1, knotsToWorldSpeed(torpedo.speedKt)) +
-      12;
+  const firePlan = buildFirePlan(target, resolvedSolution, usesTDC, torpedo).filter(
+    (entry) => entry.tube?.loaded
+  );
+  const plannedShotCount = plannedSalvoShotCount();
+  if (!firePlan.length) {
+    setStatus("使用可能な発射管がない。", "warning");
+    return;
+  }
+  if (plannedShotCount > 1 && firePlan.length < plannedShotCount) {
+    setStatus(`${getCaptainFirePatternLabel()} に必要な装填済み発射管が不足。`, "warning");
+    return;
+  }
 
-  firingTube.loaded = false;
+  const usedTubes = [];
+  firePlan.forEach((entry) => {
+    if (!entry.tube) return;
+    entry.tube.loaded = false;
+    usedTubes.push(entry.tube.label);
+    state.torpedoesInWater.push({
+      id: `torpedo-${Math.random().toString(16).slice(2)}`,
+      x: entry.launchPoint.x,
+      y: entry.launchPoint.y,
+      heading: entry.launchPoint.facing ?? sub.heading,
+      speed: knotsToWorldSpeed(torpedo.speedKt),
+      traveled: 0,
+      maxRange: torpedo.maxRange,
+      modeId: torpedo.id,
+      label: torpedo.label,
+      targetId: target.contact.id,
+      life: entry.fireLife,
+      interceptCountdown: entry.interceptCountdown,
+      hitChance: entry.hitChance,
+      motionPhase: (entry.solution.initialStraightMeters || 0) > 0 ? "startup" : "turn",
+      startupRemaining: entry.solution.initialStraightMeters || 0,
+      turnRadiusMeters: entry.solution.turnRadiusMeters || state.tdc.runProfile.turnRadiusMeters,
+      turnRemainingAngle: Math.abs(normalizeTurnDelta(entry.fireHeading - (entry.launchPoint.facing ?? sub.heading))),
+      turnDirection: normalizeTurnDelta(entry.fireHeading - (entry.launchPoint.facing ?? sub.heading)) >= 0 ? 1 : -1,
+      finalHeading: entry.fireHeading,
+      profileDistance: 0
+    });
+  });
   sub.detection = clamp(sub.detection + 0.14, 0, 1);
   state.torpedoSequence.stage = TORPEDO_SEQUENCE.fired;
   state.torpedoSequence.lastFiredTargetId = target.contact.id;
-  state.torpedoSequence.lastFiredTubeId = firingTube.id;
+  state.torpedoSequence.lastFiredTubeId = firePlan[firePlan.length - 1]?.tube?.id || state.torpedoSequence.selectedTubeId;
   state.torpedoSequence.tubeReady = false;
   state.torpedoSequence.captainFireAuthorized = false;
-  state.torpedoSequence.postFireRemaining = isSurfaced(sub) ? 6 : 14;
+  state.torpedoSequence.postFireRemaining = isSurfaced(sub) ? 6 + Math.max(0, firePlan.length - 1) * 1.4 : 14 + Math.max(0, firePlan.length - 1) * 2.4;
+  state.torpedoSequence.selectedTubeIds = [];
+  state.torpedoSequence.reservedTubeIds = [];
+  state.torpedoSequence.plannedShotSolutions = [];
   emitGermanRepeater("torpedoFire");
+  const leadGyro = firePlan[0]?.fireGyro ?? 0;
   setCommandState({
     captainOrder: `艦長命令: ${contactLabel(target.contact)}へ雷撃`,
     priorityLabel: "緊急",
     priorityTone: "critical",
-    torpedo: `進角 ${formatSigned(Math.round(fireGyro))}°${usesTDC ? " (TDC)" : ""}、発射済み`,
+    torpedo: `${getCaptainFirePatternLabel()} / 管 ${usedTubes.join(", ")} / 進角 ${formatSigned(Math.round(leadGyro))}°${usesTDC ? " (TDC)" : ""}、発射済み`,
     sonar: "命中音と護衛反応を監視",
     navigation: "回避運動準備"
   });
-
-  state.torpedoesInWater.push({
-    id: `torpedo-${Math.random().toString(16).slice(2)}`,
-    x: launchPoint.x,
-    y: launchPoint.y,
-    heading: launchPoint.facing ?? sub.heading,
-    speed: knotsToWorldSpeed(torpedo.speedKt),
-    traveled: 0,
-    maxRange: torpedo.maxRange,
-    modeId: torpedo.id,
-    label: torpedo.label,
-    targetId: target.contact.id,
-    life: fireLife,
-    interceptCountdown: resolvedSolution.interceptTime,
-    hitChance: computeTorpedoHitChance(resolvedSolution, usesTDC),
-    motionPhase: (resolvedSolution.initialStraightMeters || 0) > 0 ? "startup" : "turn",
-    startupRemaining: resolvedSolution.initialStraightMeters || 0,
-    turnRadiusMeters: resolvedSolution.turnRadiusMeters || state.tdc.runProfile.turnRadiusMeters,
-    turnRemainingAngle: Math.abs(normalizeTurnDelta(fireHeading - (launchPoint.facing ?? sub.heading))),
-    turnDirection: normalizeTurnDelta(fireHeading - (launchPoint.facing ?? sub.heading)) >= 0 ? 1 : -1,
-    finalHeading: fireHeading,
-    profileDistance: 0
-  });
   addLog(
-    `雷撃。${torpedo.label}、管 ${firingTube.label} から ${contactLabel(target.contact)} へ進角 ${formatSigned(
-      fireGyro
-    )}°、会敵 ${resolvedSolution.interceptTime.toFixed(1)} 秒。`
+    `雷撃。${torpedo.label}、${getCaptainFirePatternLabel()}、管 ${usedTubes.join(", ")} から ${contactLabel(target.contact)} へ進角 ${formatSigned(
+      leadGyro
+    )}°、先頭会敵 ${firePlan[0].interceptCountdown.toFixed(1)} 秒。`
   );
   if (riskyBinocularShot) {
     addLog("危険な浮上双眼鏡発射。護衛艦の即時反応を誘発。");
