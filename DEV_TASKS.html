@@ -449,6 +449,73 @@
     </section>
 
     <section>
+      <h2>雷撃指揮分担 / 斉射運用拡張 <code>計画済み</code></h2>
+      <p class="muted">目的: 艦長席は <code>攻撃判断 / 発射形式 / 発射許可</code>、雷撃席は <code>発射管運用 / 諸元入力 / 実発射</code> を担当し、<code>単射 / 斉射(Faecherschuss)</code> を既存TDCへ自然に接続する。</p>
+      <div class="grid">
+        <div class="card">
+          <h3>P1 タスク</h3>
+          <ul class="checklist">
+            <li><code>state.torpedoSequence</code> に <code>captainDesignatedTargetId</code> を追加する</li>
+            <li><code>state.torpedoSequence</code> に <code>captainFirePattern(single / salvo2 / salvo3)</code> を追加する</li>
+            <li><code>state.torpedoSequence</code> に <code>captainFireAuthorized</code> を追加する</li>
+            <li><code>state.torpedoSequence</code> に <code>tubeSelectMode(auto / manual)</code> を追加する</li>
+            <li><code>state.torpedoSequence</code> に <code>selectedTubeIds / reservedTubeIds / plannedShotSolutions</code> を追加する</li>
+            <li>艦長席に <code>目標指定 / 単射 / 斉射2 / 斉射3 / 発射許可 / 許可解除</code> を追加する</li>
+            <li>雷撃席に <code>自動選定 / 手動選定 / I / II / III / IV / V</code> を追加する</li>
+            <li><code>発射許可</code> がないと <code>発射</code> 実行不可にする</li>
+            <li>手動選定時は <code>chooseTubeForContact()</code> を通さず明示管を優先する</li>
+            <li>管の <code>装填 / 準備中 / 発射済 / 再装填中</code> を雷撃HUDへ明示する</li>
+          </ul>
+        </div>
+        <div class="card">
+          <h3>P2 タスク</h3>
+          <ul class="checklist">
+            <li><code>computeSalvoSpread()</code> を追加し、目標長と距離から散開角を算出する</li>
+            <li><code>2 * atan(L / 2D)</code> ベースの見込み角をゲーム内散開幅へ変換する</li>
+            <li>解精度に応じた誤差余裕を散開角へ加算する</li>
+            <li><code>plannedShotSolutions[]</code> を各発射管ごとに個別生成する</li>
+            <li>各魚雷へ <code>視差補正 / 発射管オフセット / 魚雷初動</code> を個別適用する</li>
+            <li>雷撃HUDで <code>単射 / 斉射</code> ごとの予測線色分けを行う</li>
+            <li>艦長席でも <code>指定目標 / 発射形式 / 許可状態</code> を常時確認できるようにする</li>
+          </ul>
+        </div>
+        <div class="card">
+          <h3>P3 タスク</h3>
+          <ul class="checklist">
+            <li><code>斉射2</code> と <code>斉射3</code> の本発射を実装する</li>
+            <li>使用管の同時消費と再装填待ちを実装する</li>
+            <li>同一目標への連続射で前回使用管を避けるロジックを追加する</li>
+            <li>後部発射管を <code>aft shot</code> 条件時のみ自動候補へ入れる</li>
+            <li>ドイツ語復唱へ <code>単射用意 / 斉射用意 / 発射許可 / 管番号復唱</code> を追加する</li>
+            <li>マニュアルへ <code>艦長権限 / 雷撃席権限 / 斉射手順</code> を追記する</li>
+          </ul>
+        </div>
+      </div>
+      <div class="card" style="margin-top:16px">
+        <h3>確認項目</h3>
+        <ul class="checklist">
+          <li>艦長席のコマンドが航海長や雷撃席の役割を食わない</li>
+          <li><code>目標指定 -&gt; 諸元入力 -&gt; 発射許可 -&gt; 発射</code> の責任分担が画面上で分かる</li>
+          <li>単射時は現行の射撃感を壊さない</li>
+          <li>斉射時は各魚雷が同一線ではなく、意図した散開角で分かれる</li>
+          <li>手動管選択時に未装填管を誤発射しない</li>
+        </ul>
+      </div>
+      <div class="card" style="margin-top:16px">
+        <h3>実装順チェックリスト</h3>
+        <ul class="checklist">
+          <li>TUBE-1: 状態追加と既存UIの接続ポイント整理</li>
+          <li>TUBE-2: 艦長席の <code>単射 / 斉射 / 発射許可</code> UI追加</li>
+          <li>TUBE-3: 雷撃席の <code>自動 / 手動 / I-V</code> UI追加</li>
+          <li>TUBE-4: 単射のみ手動管選択対応</li>
+          <li>TUBE-5: 斉射の散開角計算と複数予測線表示</li>
+          <li>TUBE-6: 斉射の本発射と管消費</li>
+          <li>TUBE-7: 復唱、ログ、マニュアル同期</li>
+        </ul>
+      </div>
+    </section>
+
+    <section>
       <h2>実装順チェックリスト</h2>
       <div class="grid">
         <div class="card">
