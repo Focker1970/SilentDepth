@@ -116,7 +116,6 @@ const captainPingButton = document.getElementById("captain-ping");
 const silentButton = document.getElementById("silent");
 const captainSilentButton = document.getElementById("captain-silent");
 const fireButton = document.getElementById("fire");
-const captainFireButton = document.getElementById("captain-fire");
 const torpedoSelectButton = document.getElementById("torpedo-select");
 const torpedoInputButton = document.getElementById("torpedo-input");
 const torpedoPrepareButton = document.getElementById("torpedo-prepare");
@@ -5904,13 +5903,6 @@ function updateButtons() {
   setButtonState(fireButton, "completed", torpedoFireCompleted);
   setButtonState(torpedoPrepareButton, "dim", binocularBlockedForAttack);
   setButtonState(fireButton, "dim", binocularBlockedForAttack);
-  setButtonState(captainFireButton, "active", torpedoFireActive && state.torpedoSequence.captainFireAuthorized);
-  setButtonState(captainFireButton, "completed", torpedoFireCompleted);
-  setButtonState(
-    captainFireButton,
-    "dim",
-    binocularBlockedForAttack || (torpedoFireActive && !state.torpedoSequence.captainFireAuthorized)
-  );
   if (captainDesignateTargetButton) {
     const targetAvailable = !!resolveCaptainDesignatableTarget();
     setButtonState(captainDesignateTargetButton, "active", targetAvailable);
@@ -11204,7 +11196,6 @@ torpedoSelectButton?.addEventListener("click", selectTorpedoTarget);
 torpedoInputButton?.addEventListener("click", enterTorpedoData);
 torpedoPrepareButton?.addEventListener("click", prepareTorpedoTube);
 fireButton?.addEventListener("click", fireTorpedo);
-captainFireButton?.addEventListener("click", fireTorpedo);
 captainIntentApproachButton?.addEventListener("click", () => issueCaptainIntent("approach"));
 captainIntentEvadeButton?.addEventListener("click", () => issueCaptainIntent("evade"));
 captainIntentPeriscopeButton?.addEventListener("click", () => issueCaptainIntent("periscope"));
