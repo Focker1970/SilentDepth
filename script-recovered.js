@@ -182,6 +182,9 @@ const tdcAobSuggestNode = document.getElementById("tdc-aob-suggest");
 const tdcEstimateNoteNode = document.getElementById("tdc-estimate-note");
 const tdcGyroNode = document.getElementById("tdc-gyro");
 const tdcValidNode = document.getElementById("tdc-valid");
+const tdcParallaxNode = document.getElementById("tdc-parallax");
+const tdcRunProfileNode = document.getElementById("tdc-run-profile");
+const tdcInvalidReasonNode = document.getElementById("tdc-invalid-reason");
 const tdcSolutionNoteNode = document.getElementById("tdc-solution-note");
 const tdcSyncBearingButton = document.getElementById("tdc-sync-bearing");
 const tdcSyncRangeButton = document.getElementById("tdc-sync-range");
@@ -2357,6 +2360,24 @@ function estimateTorpedoRunDistance(interceptRange, gyroAngle, runProfile = stat
     turnArcMeters,
     runDistanceEstimate: interceptRange + initialStraightMeters + turnArcMeters
   };
+}
+
+function getTdcInvalidReasonLabel(tdc = state.tdc, torpedo = getActiveTorpedoSpec()) {
+  if (tdc.valid) return "発射可";
+  if (tdc.bearing === null || tdc.range === null) return "観測値不足";
+  if (tdc.gyroAngle === null) return "進角解なし";
+  const effectiveRange = tdc.maxEffectiveRange ?? torpedo.maxRange;
+  const judgedRange = tdc.parallaxRange ?? tdc.range;
+  if (judgedRange > torpedo.maxRange) return "射程外";
+  if (judgedRange > effectiveRange) return "視差補正後に有効外";
+  if (Math.abs(tdc.gyroAngle) > TORPEDO_GYRO_LIMIT) return "ジャイロ限界超過";
+  if (
+    state.submarine.depth < UBOAT_CLASS.torpedoDepthMin ||
+    state.submarine.depth > UBOAT_CLASS.torpedoDepthMax
+  ) {
+    return "発射深度外";
+  }
+  return "解精度不足";
 }
 
 function isAftShot(contact, sub = state.submarine) {
@@ -8500,16 +8521,50 @@ function getTorpedoPreview() {
 
   if (!shot && !usesTDC) return null;
 
-  const start = { x: state.submarine.x, y: state.submarine.y };
+  const activeSolution = usesTDC ? tdcSolution : shot;
+  const observationStart = { x: state.submarine.x, y: state.submarine.y };
+  const launchStart =
+    activeSolution?.launchPoint ||
+    getTubeWorldPosition(state.torpedoSequence.selectedTubeId, state.submarine) || {
+      x: state.submarine.x,
+      y: state.submarine.y,
+      facing: state.submarine.heading
+    };
   const courseBearing = usesTDC
     ? tdcSolution?.leadBearing ?? tdc.absoluteFireBearing
     : shot.leadBearing;
   const plannedRange = usesTDC
     ? Math.min(tdcSolution?.interceptRange ?? tdc.range, torpedo.maxRange)
     : Math.min(shot.interceptRange, torpedo.maxRange);
-  const end = {
-    x: start.x + Math.cos(toRadians(courseBearing)) * plannedRange,
-    y: start.y + Math.sin(toRadians(courseBearing)) * plannedRange
+  const observationBearing = usesTDC
+    ? activeSolution?.rawBearing ?? tdc.bearing
+    : bearing(state.submarine, contact);
+  const observationRange = usesTDC
+    ? activeSolution?.rawRange ?? tdc.range
+    : distance(state.submarine, contact);
+  const observationEnd = {
+    x: observationStart.x + Math.cos(toRadians(observationBearing)) * observationRange,
+    y: observationStart.y + Math.sin(toRadians(observationBearing)) * observationRange
+  };
+  const correctedBearing = usesTDC
+    ? activeSolution?.parallaxBearing ?? courseBearing
+    : courseBearing;
+  const correctedRange = usesTDC
+    ? Math.min(activeSolution?.parallaxRange ?? plannedRange, torpedo.maxRange)
+    : plannedRange;
+  const correctedEnd = {
+    x: launchStart.x + Math.cos(toRadians(correctedBearing)) * correctedRange,
+    y: launchStart.y + Math.sin(toRadians(correctedBearing)) * correctedRange
+  };
+  const runDistance = Math.min(activeSolution?.runDistanceEstimate ?? plannedRange, torpedo.maxRange);
+  const startupDistance = Math.min(activeSolution?.initialStraightMeters ?? 0, runDistance);
+  const startupEnd = {
+    x: launchStart.x + Math.cos(toRadians(launchStart.facing ?? state.submarine.heading)) * startupDistance,
+    y: launchStart.y + Math.sin(toRadians(launchStart.facing ?? state.submarine.heading)) * startupDistance
+  };
+  const actualEnd = {
+    x: launchStart.x + Math.cos(toRadians(courseBearing)) * runDistance,
+    y: launchStart.y + Math.sin(toRadians(courseBearing)) * runDistance
   };
 
   return {
@@ -8518,14 +8573,21 @@ function getTorpedoPreview() {
     torpedoLabel: torpedo.label,
     courseBearing,
     plannedRange,
-    start,
-    end,
+    start: launchStart,
+    end: actualEnd,
+    observationStart,
+    observationEnd,
+    correctedStart: launchStart,
+    correctedEnd,
+    startupEnd,
+    runDistance,
     interceptPoint: usesTDC
-      ? tdcSolution?.interceptPoint || end
-      : shot?.interceptPoint || end,
+      ? tdcSolution?.interceptPoint || actualEnd
+      : shot?.interceptPoint || actualEnd,
     gyroAngle: usesTDC
       ? tdcSolution?.gyroAngle ?? tdc.gyroAngle
-      : shot?.gyroAngle ?? null
+      : shot?.gyroAngle ?? null,
+    activeSolution
   };
 }
 
@@ -8561,16 +8623,46 @@ function drawTorpedoPreview(camera) {
   const subPoint = toScreen(preview.start.x, preview.start.y, camera);
   const endPoint = toScreen(preview.end.x, preview.end.y, camera);
   const interceptPoint = toScreen(preview.interceptPoint.x, preview.interceptPoint.y, camera);
+  const observationStart = toScreen(preview.observationStart.x, preview.observationStart.y, camera);
+  const observationEnd = toScreen(preview.observationEnd.x, preview.observationEnd.y, camera);
+  const correctedStart = toScreen(preview.correctedStart.x, preview.correctedStart.y, camera);
+  const correctedEnd = toScreen(preview.correctedEnd.x, preview.correctedEnd.y, camera);
+  const startupEnd = toScreen(preview.startupEnd.x, preview.startupEnd.y, camera);
 
   ctx.save();
-  ctx.setLineDash([10, 8]);
+  ctx.setLineDash([4, 6]);
+  ctx.strokeStyle = "rgba(141, 219, 237, 0.72)";
+  ctx.lineWidth = 1.4;
+  ctx.beginPath();
+  ctx.moveTo(observationStart.x, observationStart.y);
+  ctx.lineTo(observationEnd.x, observationEnd.y);
+  ctx.stroke();
+
+  ctx.setLineDash([8, 6]);
+  ctx.strokeStyle = "rgba(247, 200, 122, 0.92)";
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(correctedStart.x, correctedStart.y);
+  ctx.lineTo(correctedEnd.x, correctedEnd.y);
+  ctx.stroke();
+
+  ctx.setLineDash([]);
   ctx.strokeStyle = lineStroke;
   ctx.lineWidth = preview.usesTDC ? 3 : 2;
   ctx.beginPath();
   ctx.moveTo(subPoint.x, subPoint.y);
+  ctx.lineTo(startupEnd.x, startupEnd.y);
   ctx.lineTo(endPoint.x, endPoint.y);
   ctx.stroke();
-  ctx.setLineDash([]);
+
+  ctx.fillStyle = "rgba(247, 200, 122, 0.95)";
+  ctx.beginPath();
+  ctx.arc(correctedStart.x, correctedStart.y, 3.5, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = "#8bdcf1";
+  ctx.beginPath();
+  ctx.arc(observationEnd.x, observationEnd.y, 3, 0, Math.PI * 2);
+  ctx.fill();
 
   ctx.fillStyle = lineFill;
   ctx.beginPath();
@@ -9452,10 +9544,32 @@ function drawTheatrePlot() {
       const start = theatrePoint(preview.start.x, preview.start.y, width, height);
       const end = theatrePoint(preview.end.x, preview.end.y, width, height);
       const hit = theatrePoint(preview.interceptPoint.x, preview.interceptPoint.y, width, height);
+      const observationStart = theatrePoint(preview.observationStart.x, preview.observationStart.y, width, height);
+      const observationEnd = theatrePoint(preview.observationEnd.x, preview.observationEnd.y, width, height);
+      const correctedStart = theatrePoint(preview.correctedStart.x, preview.correctedStart.y, width, height);
+      const correctedEnd = theatrePoint(preview.correctedEnd.x, preview.correctedEnd.y, width, height);
+      const startupEnd = theatrePoint(preview.startupEnd.x, preview.startupEnd.y, width, height);
+      ctx2.setLineDash([4, 5]);
+      ctx2.strokeStyle = "rgba(141, 219, 237, 0.78)";
+      ctx2.lineWidth = 1.3;
+      ctx2.beginPath();
+      ctx2.moveTo(observationStart.x, observationStart.y);
+      ctx2.lineTo(observationEnd.x, observationEnd.y);
+      ctx2.stroke();
+
+      ctx2.setLineDash([7, 5]);
+      ctx2.strokeStyle = "rgba(247, 200, 122, 0.92)";
+      ctx2.lineWidth = 1.8;
+      ctx2.beginPath();
+      ctx2.moveTo(correctedStart.x, correctedStart.y);
+      ctx2.lineTo(correctedEnd.x, correctedEnd.y);
+      ctx2.stroke();
+
       ctx2.strokeStyle = state.torpedoSequence.tubeReady ? "#7ce8a6" : "#f7c87a";
       ctx2.setLineDash([8, 6]);
       ctx2.beginPath();
       ctx2.moveTo(start.x, start.y);
+      ctx2.lineTo(startupEnd.x, startupEnd.y);
       ctx2.lineTo(end.x, end.y);
       ctx2.stroke();
       ctx2.setLineDash([]);
@@ -9463,6 +9577,22 @@ function drawTheatrePlot() {
       ctx2.beginPath();
       ctx2.arc(hit.x, hit.y, 4, 0, Math.PI * 2);
       ctx2.fill();
+      ctx2.fillStyle = "#8bdcf1";
+      ctx2.beginPath();
+      ctx2.arc(observationEnd.x, observationEnd.y, 2.5, 0, Math.PI * 2);
+      ctx2.fill();
+      ctx2.fillStyle = "#f7c87a";
+      ctx2.beginPath();
+      ctx2.arc(correctedStart.x, correctedStart.y, 2.5, 0, Math.PI * 2);
+      ctx2.fill();
+
+      ctx2.font = "10px Avenir Next, Hiragino Sans, sans-serif";
+      ctx2.fillStyle = "rgba(223, 250, 255, 0.7)";
+      ctx2.fillText("観測", observationEnd.x + 6, observationEnd.y - 6);
+      ctx2.fillStyle = "rgba(255, 241, 201, 0.82)";
+      ctx2.fillText("補正", correctedEnd.x + 6, correctedEnd.y + 12);
+      ctx2.fillStyle = state.torpedoSequence.tubeReady ? "#dfffe9" : "#fff1c9";
+      ctx2.fillText("実走行", end.x + 6, end.y - 6);
     }
   } else if (state.station === "navigation") {
     const prediction = navigationPlotPrediction();
@@ -9826,6 +9956,28 @@ function updateTDCDisplay() {
         (tdc.parallaxRange ?? tdc.range) > torpedo.maxRange);
     tdcValidNode.textContent = tdc.valid ? "発射可" : rangeInvalid ? "有効外" : tdc.gyroAngle !== null ? "範囲外" : "---";
     tdcValidNode.style.color = tdc.valid ? "#9bd9a5" : tdc.gyroAngle !== null ? "#ff8771" : "#a5c1cd";
+  }
+  if (tdcParallaxNode) {
+    tdcParallaxNode.textContent =
+      tdc.parallaxBearing !== null && tdc.parallaxRange !== null
+        ? `観測 ${formatHeading(tdc.bearing)} ${Math.round(tdc.range ?? 0)}m -> 補正 ${formatHeading(
+            tdc.parallaxBearing
+          )} ${Math.round(tdc.parallaxRange)}m`
+        : "補正前後の比較待ち";
+  }
+  if (tdcRunProfileNode) {
+    const solution = tdc.solution;
+    tdcRunProfileNode.textContent = solution
+      ? `初動 ${Math.round(solution.initialStraightMeters || 0)}m / 旋回半径 ${Math.round(
+          solution.turnRadiusMeters || 0
+        )}m / 予想走行 ${Math.round(solution.runDistanceEstimate || solution.interceptRange)}m`
+      : `初動 ${Math.round(tdc.runProfile.initialStraightMeters)}m / 旋回半径 ${Math.round(
+          tdc.runProfile.turnRadiusMeters
+        )}m`;
+  }
+  if (tdcInvalidReasonNode) {
+    tdcInvalidReasonNode.textContent = getTdcInvalidReasonLabel(tdc, torpedo);
+    tdcInvalidReasonNode.style.color = tdc.valid ? "#9bd9a5" : "#ffd57c";
   }
   if (tdcSolutionNoteNode) {
     const solution = tdc.solution;

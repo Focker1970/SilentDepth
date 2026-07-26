@@ -727,6 +727,26 @@ button:disabled {
   width: 340px;
 }
 
+.tdc-phase-panel {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid rgba(141, 219, 237, 0.2);
+  display: grid;
+  gap: 8px;
+}
+
+.tdc-phase-row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.tdc-phase-row strong {
+  color: #dffaff;
+  font-size: 0.9rem;
+  line-height: 1.45;
+}
+
 .center-column.periscope-layout #theatre-plot-card,
 .center-column.torpedo-layout #theatre-plot-card {
   display: none;
