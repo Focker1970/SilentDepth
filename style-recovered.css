@@ -848,6 +848,11 @@ canvas {
   padding: 14px;
 }
 
+.command-subcard {
+  margin-top: 12px;
+  padding: 12px 14px;
+}
+
 .button-row {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));

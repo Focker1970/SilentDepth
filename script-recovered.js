@@ -50,6 +50,10 @@ const torpedoReportBriefNode = document.getElementById("torpedo-report-brief");
 const navigationReportBriefNode = document.getElementById("navigation-report-brief");
 const captainSummaryNode = document.getElementById("captain-summary");
 const captainIntentNode = document.getElementById("captain-intent");
+const captainFireTargetNode = document.getElementById("captain-fire-target");
+const captainFirePatternNode = document.getElementById("captain-fire-pattern");
+const captainFireAuthNode = document.getElementById("captain-fire-auth");
+const captainTubeModeNode = document.getElementById("captain-tube-mode");
 const sonarListNode = document.getElementById("sonar-list");
 const torpedoSolutionNode = document.getElementById("torpedo-solution");
 const navigationSummaryNode = document.getElementById("navigation-summary");
@@ -127,6 +131,12 @@ const captainIntentSurfaceButton = document.getElementById("captain-intent-surfa
 const captainIntentDeepButton = document.getElementById("captain-intent-deep");
 const captainIntentQuietStarboardButton = document.getElementById("captain-intent-quiet-starboard");
 const captainIntentEgressButton = document.getElementById("captain-intent-egress");
+const captainDesignateTargetButton = document.getElementById("captain-designate-target");
+const captainFirePatternSingleButton = document.getElementById("captain-fire-pattern-single");
+const captainFirePatternSalvo2Button = document.getElementById("captain-fire-pattern-salvo2");
+const captainFirePatternSalvo3Button = document.getElementById("captain-fire-pattern-salvo3");
+const captainAuthorizeFireButton = document.getElementById("captain-authorize-fire");
+const captainRevokeFireButton = document.getElementById("captain-revoke-fire");
 const engineTelegraphNode = document.getElementById("engine-telegraph");
 const engineTelegraphNeedleNode = document.getElementById("engine-telegraph-needle");
 const engineTelegraphPropulsionNode = document.getElementById("engine-telegraph-propulsion");
@@ -2365,6 +2375,27 @@ function getTubeSelectModeLabel(mode = state.torpedoSequence?.tubeSelectMode) {
   return mode === "manual" ? "手動" : "自動";
 }
 
+function getCaptainDesignatedContact() {
+  const designatedId = state.torpedoSequence.captainDesignatedTargetId;
+  if (!designatedId) return null;
+  return state.contacts.find((contact) => contact.id === designatedId && !contact.destroyed) || null;
+}
+
+function resolveCaptainDesignatableTarget() {
+  const focusedId = state.periscopeControl.focusContactId;
+  const focusedContact = focusedId
+    ? state.contacts.find((contact) => contact.id === focusedId && !contact.destroyed && contact.detected) || null
+    : null;
+  if (focusedContact) return focusedContact;
+  const selectedId = state.torpedoSequence.selectedTargetId;
+  const selectedContact = selectedId
+    ? state.contacts.find((contact) => contact.id === selectedId && !contact.destroyed) || null
+    : null;
+  if (selectedContact) return selectedContact;
+  const bestShot = getBestKnownTorpedoSolution();
+  return bestShot?.contact || null;
+}
+
 function copyTorpedoCommandState(source, target) {
   target.captainDesignatedTargetId = source?.captainDesignatedTargetId ?? null;
   target.captainFirePattern = source?.captainFirePattern ?? "single";
@@ -2440,6 +2471,79 @@ function buildPostFireTorpedoSequence(targetId, tubeId, postFireRemaining) {
   next.reservedTubeIds = [];
   next.plannedShotSolutions = [];
   return next;
+}
+
+function selectCaptainFirePattern(pattern = "single") {
+  state.torpedoSequence.captainFirePattern =
+    pattern === "salvo3" ? "salvo3" : pattern === "salvo2" ? "salvo2" : "single";
+  state.torpedoSequence.captainFireAuthorized = false;
+  state.torpedoSequence.plannedShotSolutions = [];
+  const label = getCaptainFirePatternLabel();
+  setCommandState({
+    captainOrder: `艦長命令: ${label}準備`,
+    priorityLabel: "警戒",
+    priorityTone: "high",
+    torpedo: `${label}前提で管配分を再確認`,
+    navigation: "現在の射点維持"
+  });
+  addLog(`艦長命令: ${label}。雷撃席は管割り当てと射線を再確認。`);
+  setStatus(`${label} を指定。発射許可は解除された。`, "good");
+  updateButtons();
+  updateHud();
+}
+
+function designateCaptainTarget() {
+  const contact = resolveCaptainDesignatableTarget();
+  if (!contact) {
+    setStatus("艦長指定できる目標がない。潜望鏡焦点か既知接触を確保せよ。", "warning");
+    return;
+  }
+  state.torpedoSequence.captainDesignatedTargetId = contact.id;
+  state.torpedoSequence.selectedTargetId = contact.id;
+  state.torpedoSequence.captainFireAuthorized = false;
+  state.torpedoSequence.selectedTubeId = resolveAssignedTubeForContact(contact, false)?.id ?? null;
+  syncTDCLaunchGeometry(state.torpedoSequence.selectedTubeId);
+  clearTorpedoExecutionState(state.torpedoSequence, {
+    preserveManual: state.torpedoSequence.tubeSelectMode === "manual"
+  });
+  updateTorpedoSequenceStage();
+  setCommandState({
+    captainOrder: `艦長命令: ${contactLabel(contact)} を雷撃目標に指定`,
+    priorityLabel: "警戒",
+    priorityTone: "high",
+    torpedo: "指定目標へ諸元入力を開始",
+    navigation: "射点維持"
+  });
+  addLog(`艦長命令: ${contactLabel(contact)} を指定目標とする。雷撃席は諸元入力へ。`);
+  setStatus(`艦長指定目標を ${contactLabel(contact)} に更新。`, "good");
+  updateButtons();
+  updateHud();
+}
+
+function setCaptainFireAuthorization(authorized) {
+  const contact = getCaptainDesignatedContact() || resolveCaptainDesignatableTarget();
+  if (authorized && !contact) {
+    setStatus("発射許可を出す前に目標指定が必要。", "warning");
+    return;
+  }
+  if (authorized && state.torpedoSequence.stage !== TORPEDO_SEQUENCE.tubeReady) {
+    setStatus("発射準備完了後に発射許可を出してください。", "warning");
+    return;
+  }
+  state.torpedoSequence.captainFireAuthorized = authorized;
+  setCommandState({
+    captainOrder: authorized
+      ? `艦長命令: ${contactLabel(contact)} へ発射許可`
+      : "艦長命令: 発射許可解除",
+    priorityLabel: authorized ? "緊急" : "通常",
+    priorityTone: authorized ? "critical" : "normal",
+    torpedo: authorized ? "発射許可、発射管は即応" : "発射保留、現解を維持",
+    navigation: authorized ? "射点保持" : "現位置維持"
+  });
+  addLog(authorized ? `艦長命令: ${contactLabel(contact)} へ発射許可。` : "艦長命令: 発射許可解除。");
+  setStatus(authorized ? "発射許可を発令。雷撃席は発射可能。" : "発射許可を解除。", authorized ? "good" : "warning");
+  updateButtons();
+  updateHud();
 }
 
 function estimateTorpedoRunDistance(interceptRange, gyroAngle, runProfile = state.tdc.runProfile) {
@@ -5456,6 +5560,12 @@ function updateButtons() {
     state.battleStations.active && state.battleStations.mode === "egress"
   );
   setButtonState(captainAlarmButton, "active", state.alarmDive.active);
+  const captainPattern = state.torpedoSequence.captainFirePattern;
+  setButtonState(captainFirePatternSingleButton, "active", captainPattern === "single");
+  setButtonState(captainFirePatternSalvo2Button, "active", captainPattern === "salvo2");
+  setButtonState(captainFirePatternSalvo3Button, "active", captainPattern === "salvo3");
+  setButtonState(captainAuthorizeFireButton, "active", state.torpedoSequence.captainFireAuthorized);
+  setButtonState(captainRevokeFireButton, "active", !state.torpedoSequence.captainFireAuthorized);
   const seqStage = state.torpedoSequence.stage;
   const torpedoSelectActive = seqStage === TORPEDO_SEQUENCE.idle;
   const torpedoSelectCompleted = seqStage !== TORPEDO_SEQUENCE.idle;
@@ -5486,7 +5596,22 @@ function updateButtons() {
   setButtonState(fireButton, "completed", torpedoFireCompleted);
   setButtonState(torpedoPrepareButton, "dim", binocularBlockedForAttack);
   setButtonState(fireButton, "dim", binocularBlockedForAttack);
-  setButtonState(captainFireButton, "dim", binocularBlockedForAttack);
+  setButtonState(captainFireButton, "active", torpedoFireActive && state.torpedoSequence.captainFireAuthorized);
+  setButtonState(captainFireButton, "completed", torpedoFireCompleted);
+  setButtonState(
+    captainFireButton,
+    "dim",
+    binocularBlockedForAttack || (torpedoFireActive && !state.torpedoSequence.captainFireAuthorized)
+  );
+  if (captainDesignateTargetButton) {
+    const targetAvailable = !!resolveCaptainDesignatableTarget();
+    setButtonState(captainDesignateTargetButton, "active", targetAvailable);
+    setButtonState(captainDesignateTargetButton, "dim", !targetAvailable);
+  }
+  if (captainAuthorizeFireButton) {
+    const canAuthorize = seqStage === TORPEDO_SEQUENCE.tubeReady && !!getCaptainDesignatedContact();
+    setButtonState(captainAuthorizeFireButton, "dim", !canAuthorize);
+  }
   setButtonState(audioToggleButton, "active", audioState.enabled);
   if (audioToggleButton) {
     audioToggleButton.textContent = audioState.enabled ? "音響停止" : "音響開始";
@@ -6449,6 +6574,19 @@ function updateHud() {
   torpedoSelectedTargetNode.textContent = selectedShot
     ? contactLabel(selectedShot.contact)
     : "未選定";
+  if (captainFireTargetNode) {
+    const designatedContact = getCaptainDesignatedContact();
+    captainFireTargetNode.textContent = designatedContact ? contactLabel(designatedContact) : "未指定";
+  }
+  if (captainFirePatternNode) {
+    captainFirePatternNode.textContent = firePatternLabel;
+  }
+  if (captainFireAuthNode) {
+    captainFireAuthNode.textContent = fireAuthorizationLabel;
+  }
+  if (captainTubeModeNode) {
+    captainTubeModeNode.textContent = tubeModeLabel;
+  }
   if (torpedoSelectedTubeNode) {
     torpedoSelectedTubeNode.textContent = state.torpedoSequence.selectedTubeId
       ? `管 ${tubeLabelById(state.torpedoSequence.selectedTubeId)}`
@@ -7251,6 +7389,17 @@ function fireTorpedo() {
     setStatus(fireStatus.detail, "warning");
     return;
   }
+  if (!state.torpedoSequence.captainFireAuthorized) {
+    setCommandState({
+      captainOrder: "艦長命令: 発射許可待ち",
+      priorityLabel: "警戒",
+      priorityTone: "high",
+      torpedo: "発射準備完了、許可待ち",
+      navigation: "射点保持"
+    });
+    setStatus("艦長の発射許可が必要。", "warning");
+    return;
+  }
   if (!firingTube?.loaded) {
     setStatus("選択発射管が空。再装填からやり直す必要がある。", "warning");
     return;
@@ -7330,6 +7479,7 @@ function fireTorpedo() {
   state.torpedoSequence.lastFiredTargetId = target.contact.id;
   state.torpedoSequence.lastFiredTubeId = firingTube.id;
   state.torpedoSequence.tubeReady = false;
+  state.torpedoSequence.captainFireAuthorized = false;
   state.torpedoSequence.postFireRemaining = isSurfaced(sub) ? 6 : 14;
   emitGermanRepeater("torpedoFire");
   setCommandState({
@@ -10621,6 +10771,12 @@ captainIntentSurfaceButton?.addEventListener("click", () => issueCaptainIntent("
 captainIntentDeepButton?.addEventListener("click", () => issueCaptainIntent("deep"));
 captainIntentQuietStarboardButton?.addEventListener("click", () => issueCaptainIntent("quiet_starboard"));
 captainIntentEgressButton?.addEventListener("click", () => issueCaptainIntent("egress"));
+captainDesignateTargetButton?.addEventListener("click", designateCaptainTarget);
+captainFirePatternSingleButton?.addEventListener("click", () => selectCaptainFirePattern("single"));
+captainFirePatternSalvo2Button?.addEventListener("click", () => selectCaptainFirePattern("salvo2"));
+captainFirePatternSalvo3Button?.addEventListener("click", () => selectCaptainFirePattern("salvo3"));
+captainAuthorizeFireButton?.addEventListener("click", () => setCaptainFireAuthorization(true));
+captainRevokeFireButton?.addEventListener("click", () => setCaptainFireAuthorization(false));
 captainPeriscopeButton?.addEventListener("click", () => {
   if (!isPeriscopeDepth(state.submarine) && state.viewMode !== "periscope") {
     setStatus("潜望鏡は潜望鏡深度でのみ使用可能。先に 15m まで上げてください。", "warning");
