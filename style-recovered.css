@@ -872,6 +872,10 @@ canvas {
   grid-template-columns: 1fr;
 }
 
+.button-row.tube-row {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+
 .contact-list {
   margin: 10px 0 0;
   padding-left: 18px;

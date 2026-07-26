@@ -120,6 +120,8 @@ const captainFireButton = document.getElementById("captain-fire");
 const torpedoSelectButton = document.getElementById("torpedo-select");
 const torpedoInputButton = document.getElementById("torpedo-input");
 const torpedoPrepareButton = document.getElementById("torpedo-prepare");
+const torpedoTubeAutoButton = document.getElementById("torpedo-tube-auto");
+const torpedoTubeManualButton = document.getElementById("torpedo-tube-manual");
 const captainPeriscopeButton = document.getElementById("captain-periscope");
 const captainBinocularButton = document.getElementById("captain-binocular");
 const captainAlarmButton = document.getElementById("captain-alarm");
@@ -208,6 +210,7 @@ const difficultyToggleButton = document.getElementById("difficulty-toggle");
 const difficultyLabelNode = document.getElementById("difficulty-label");
 const timeScaleButtons = [...document.querySelectorAll("[data-timescale]")];
 const torpedoModeButtons = [...document.querySelectorAll("[data-torpedo-mode]")];
+const torpedoTubeButtons = [...document.querySelectorAll("[data-tube-id]")];
 
 const speedButtons = [...document.querySelectorAll("[data-speed]")];
 const depthButtons = [...document.querySelectorAll("[data-depth]")];
@@ -2471,6 +2474,53 @@ function buildPostFireTorpedoSequence(targetId, tubeId, postFireRemaining) {
   next.reservedTubeIds = [];
   next.plannedShotSolutions = [];
   return next;
+}
+
+function setTubeSelectMode(mode = "auto") {
+  const nextMode = mode === "manual" ? "manual" : "auto";
+  if (state.torpedoSequence.tubeSelectMode === nextMode) return;
+  state.torpedoSequence.tubeSelectMode = nextMode;
+  state.torpedoSequence.captainFireAuthorized = false;
+  if (nextMode === "auto") {
+    const selectedContact = state.torpedoSequence.selectedTargetId
+      ? state.contacts.find(
+          (contact) => contact.id === state.torpedoSequence.selectedTargetId && !contact.destroyed
+        ) || null
+      : null;
+    state.torpedoSequence.selectedTubeId = selectedContact
+      ? chooseTubeForContact(selectedContact, true)?.id ?? null
+      : null;
+    syncPlannedTubeState(state.torpedoSequence, { preserveManual: false, clearPlans: true });
+  } else {
+    syncPlannedTubeState(state.torpedoSequence, { preserveManual: true, clearPlans: true });
+  }
+  syncTDCLaunchGeometry(state.torpedoSequence.selectedTubeId);
+  setStatus(
+    nextMode === "manual" ? "発射管選択を手動へ切替。" : "発射管選択を自動へ復帰。",
+    "good"
+  );
+  updateButtons();
+  updateHud();
+}
+
+function selectManualTube(tubeId) {
+  const tube = findTubeById(tubeId, state.submarine);
+  if (!tube) {
+    setStatus("指定発射管が見つからない。", "warning");
+    return;
+  }
+  if (state.torpedoSequence.tubeSelectMode !== "manual") {
+    setTubeSelectMode("manual");
+  }
+  state.torpedoSequence.selectedTubeId = tube.id;
+  state.torpedoSequence.selectedTubeIds = [tube.id];
+  state.torpedoSequence.reservedTubeIds = [tube.id];
+  state.torpedoSequence.plannedShotSolutions = [];
+  state.torpedoSequence.captainFireAuthorized = false;
+  syncTDCLaunchGeometry(tube.id);
+  setStatus(`発射管 ${tube.label} を手動指定。`, tube.loaded ? "good" : "warning");
+  updateButtons();
+  updateHud();
 }
 
 function selectCaptainFirePattern(pattern = "single") {
@@ -5541,6 +5591,21 @@ function updateButtons() {
       button.dataset.torpedoMode === state.torpedoSequence.selectedMode;
     setButtonState(button, "active", activeMode);
     setButtonState(button, "dim", state.difficulty !== "historical");
+  }
+  setButtonState(torpedoTubeAutoButton, "active", state.torpedoSequence.tubeSelectMode === "auto");
+  setButtonState(torpedoTubeManualButton, "active", state.torpedoSequence.tubeSelectMode === "manual");
+  for (const button of torpedoTubeButtons) {
+    const tube = findTubeById(button.dataset.tubeId, state.submarine);
+    const manualMode = state.torpedoSequence.tubeSelectMode === "manual";
+    const selected = state.torpedoSequence.selectedTubeId === button.dataset.tubeId;
+    setButtonState(button, "active", manualMode && selected);
+    setButtonState(button, "dim", !manualMode || !tube?.loaded);
+    button.disabled = !manualMode;
+    button.title = !manualMode
+      ? "手動選定に切り替えると指定可能"
+      : tube?.loaded
+        ? ""
+        : "この発射管は未装填";
   }
 
   const periscopeUsable = isPeriscopeDepth(state.submarine) || state.viewMode === "periscope";
@@ -10753,6 +10818,11 @@ for (const button of holdCourseButtons) {
 }
 for (const button of torpedoModeButtons) {
   button.addEventListener("click", () => selectTorpedoMode(button.dataset.torpedoMode));
+}
+torpedoTubeAutoButton?.addEventListener("click", () => setTubeSelectMode("auto"));
+torpedoTubeManualButton?.addEventListener("click", () => setTubeSelectMode("manual"));
+for (const button of torpedoTubeButtons) {
+  button.addEventListener("click", () => selectManualTube(button.dataset.tubeId));
 }
 navHoldCourseButton?.addEventListener("click", holdCourse);
 pingButton?.addEventListener("click", activePing);
