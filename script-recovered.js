@@ -2378,6 +2378,10 @@ function getTubeSelectModeLabel(mode = state.torpedoSequence?.tubeSelectMode) {
   return mode === "manual" ? "手動" : "自動";
 }
 
+function supportsManualSingleTubeControl(seq = state.torpedoSequence) {
+  return (seq?.captainFirePattern || "single") === "single";
+}
+
 function getCaptainDesignatedContact() {
   const designatedId = state.torpedoSequence.captainDesignatedTargetId;
   if (!designatedId) return null;
@@ -2445,7 +2449,7 @@ function clearTorpedoExecutionState(seq = state.torpedoSequence, options = {}) {
 
 function resolveAssignedTubeForContact(contact, preferCurrent = false) {
   const seq = state.torpedoSequence;
-  if (seq.tubeSelectMode === "manual") {
+  if (seq.tubeSelectMode === "manual" && supportsManualSingleTubeControl(seq)) {
     const manualCandidates = (seq.selectedTubeIds?.length ? seq.selectedTubeIds : [seq.selectedTubeId]).filter(Boolean);
     const manualTube =
       manualCandidates
@@ -2479,6 +2483,11 @@ function buildPostFireTorpedoSequence(targetId, tubeId, postFireRemaining) {
 function setTubeSelectMode(mode = "auto") {
   const nextMode = mode === "manual" ? "manual" : "auto";
   if (state.torpedoSequence.tubeSelectMode === nextMode) return;
+  if (nextMode === "manual" && !supportsManualSingleTubeControl()) {
+    setStatus("手動発射管選択は単射時のみ使用可能。斉射では自動選定を使用する。", "warning");
+    updateButtons();
+    return;
+  }
   state.torpedoSequence.tubeSelectMode = nextMode;
   state.torpedoSequence.captainFireAuthorized = false;
   if (nextMode === "auto") {
@@ -2504,6 +2513,10 @@ function setTubeSelectMode(mode = "auto") {
 }
 
 function selectManualTube(tubeId) {
+  if (!supportsManualSingleTubeControl()) {
+    setStatus("手動発射管選択は単射時のみ使用可能。", "warning");
+    return;
+  }
   const tube = findTubeById(tubeId, state.submarine);
   if (!tube) {
     setStatus("指定発射管が見つからない。", "warning");
@@ -2528,6 +2541,20 @@ function selectCaptainFirePattern(pattern = "single") {
     pattern === "salvo3" ? "salvo3" : pattern === "salvo2" ? "salvo2" : "single";
   state.torpedoSequence.captainFireAuthorized = false;
   state.torpedoSequence.plannedShotSolutions = [];
+  if (!supportsManualSingleTubeControl()) {
+    state.torpedoSequence.tubeSelectMode = "auto";
+    state.torpedoSequence.selectedTubeIds = [];
+    state.torpedoSequence.reservedTubeIds = [];
+    const selectedContact = state.torpedoSequence.selectedTargetId
+      ? state.contacts.find(
+          (contact) => contact.id === state.torpedoSequence.selectedTargetId && !contact.destroyed
+        ) || null
+      : null;
+    state.torpedoSequence.selectedTubeId = selectedContact
+      ? chooseTubeForContact(selectedContact, true)?.id ?? null
+      : state.torpedoSequence.selectedTubeId;
+    syncTDCLaunchGeometry(state.torpedoSequence.selectedTubeId);
+  }
   const label = getCaptainFirePatternLabel();
   setCommandState({
     captainOrder: `艦長命令: ${label}準備`,
@@ -2537,7 +2564,12 @@ function selectCaptainFirePattern(pattern = "single") {
     navigation: "現在の射点維持"
   });
   addLog(`艦長命令: ${label}。雷撃席は管割り当てと射線を再確認。`);
-  setStatus(`${label} を指定。発射許可は解除された。`, "good");
+  setStatus(
+    supportsManualSingleTubeControl()
+      ? `${label} を指定。発射許可は解除された。`
+      : `${label} を指定。発射管選択は自動へ戻した。`,
+    "good"
+  );
   updateButtons();
   updateHud();
 }
@@ -5592,17 +5624,24 @@ function updateButtons() {
     setButtonState(button, "active", activeMode);
     setButtonState(button, "dim", state.difficulty !== "historical");
   }
+  const manualSingleTubeControl = supportsManualSingleTubeControl();
   setButtonState(torpedoTubeAutoButton, "active", state.torpedoSequence.tubeSelectMode === "auto");
   setButtonState(torpedoTubeManualButton, "active", state.torpedoSequence.tubeSelectMode === "manual");
+  setButtonState(torpedoTubeManualButton, "dim", !manualSingleTubeControl);
+  if (torpedoTubeManualButton) {
+    torpedoTubeManualButton.title = manualSingleTubeControl ? "" : "手動選定は単射時のみ使用可能";
+  }
   for (const button of torpedoTubeButtons) {
     const tube = findTubeById(button.dataset.tubeId, state.submarine);
-    const manualMode = state.torpedoSequence.tubeSelectMode === "manual";
+    const manualMode = state.torpedoSequence.tubeSelectMode === "manual" && manualSingleTubeControl;
     const selected = state.torpedoSequence.selectedTubeId === button.dataset.tubeId;
     setButtonState(button, "active", manualMode && selected);
     setButtonState(button, "dim", !manualMode || !tube?.loaded);
     button.disabled = !manualMode;
     button.title = !manualMode
-      ? "手動選定に切り替えると指定可能"
+      ? manualSingleTubeControl
+        ? "手動選定に切り替えると指定可能"
+        : "単射時のみ手動指定可能"
       : tube?.loaded
         ? ""
         : "この発射管は未装填";
