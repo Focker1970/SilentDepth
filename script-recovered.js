@@ -2345,6 +2345,20 @@ function formatTubeGeometrySummary(tubeId = state.tdc.tubeId, sub = state.submar
   return `管 ${tubeLabelById(tubeId)} / 艦基準 x${world.localX.toFixed(1)}m y${world.localY.toFixed(1)}m / 発射方位 ${formatHeading(world.facing)}`;
 }
 
+function estimateTorpedoRunDistance(interceptRange, gyroAngle, runProfile = state.tdc.runProfile) {
+  const initialStraightMeters = runProfile?.enabled ? runProfile.initialStraightMeters : 0;
+  const turnRadiusMeters = runProfile?.enabled ? runProfile.turnRadiusMeters : 0;
+  const turnAngleRad = Math.abs(toRadians(gyroAngle || 0));
+  const turnArcMeters =
+    runProfile?.enabled && turnRadiusMeters > 0 ? turnRadiusMeters * turnAngleRad : 0;
+  return {
+    initialStraightMeters,
+    turnRadiusMeters,
+    turnArcMeters,
+    runDistanceEstimate: interceptRange + initialStraightMeters + turnArcMeters
+  };
+}
+
 function isAftShot(contact, sub = state.submarine) {
   const rel = normalizeAngle(bearing(sub, contact) - sub.heading);
   return Math.abs(rel) >= 105;
@@ -4321,6 +4335,7 @@ function computeTorpedoSolution(contact) {
   const aspect = normalizeAngle(contact.heading - (bearing(contact, sub) + 180));
   const geometry = computeAimingGeometry(contact, torpedo);
   const effectiveRangeLimit = geometry.maxEffectiveRange * (0.82 + nav.solutionRating * 0.18);
+  const runEstimate = estimateTorpedoRunDistance(interceptRange, gyroAngle);
 
   return {
     contact,
@@ -4342,6 +4357,10 @@ function computeTorpedoSolution(contact) {
     aftShot: geometry.aftShot,
     solutionRating: nav.solutionRating,
     effectiveGyroLimit: TORPEDO_GYRO_LIMIT - (1 - nav.solutionRating) * 12,
+    initialStraightMeters: runEstimate.initialStraightMeters,
+    turnRadiusMeters: runEstimate.turnRadiusMeters,
+    turnArcMeters: runEstimate.turnArcMeters,
+    runDistanceEstimate: runEstimate.runDistanceEstimate,
     shotValid:
       range <= effectiveRangeLimit &&
       interceptRange <= torpedo.maxRange * (0.82 + nav.solutionRating * 0.18) &&
@@ -4416,6 +4435,7 @@ function computeManualTDCSolution(contact) {
   const interceptRange = distance(launchPoint, { x: interceptX, y: interceptY });
   const effectiveGyroLimit = TORPEDO_GYRO_LIMIT - (1 - nav.solutionRating) * 12;
   const effectiveRangeLimit = maxEffectiveRange * (0.82 + nav.solutionRating * 0.18);
+  const runEstimate = estimateTorpedoRunDistance(interceptRange, gyroAngle, tdc.runProfile);
 
   return {
     contact: {
@@ -4450,6 +4470,10 @@ function computeManualTDCSolution(contact) {
     aftShot: bearingAngle < 35,
     solutionRating: nav.solutionRating,
     effectiveGyroLimit,
+    initialStraightMeters: runEstimate.initialStraightMeters,
+    turnRadiusMeters: runEstimate.turnRadiusMeters,
+    turnArcMeters: runEstimate.turnArcMeters,
+    runDistanceEstimate: runEstimate.runDistanceEstimate,
     shotValid:
       parallaxRange <= effectiveRangeLimit &&
       interceptRange <= torpedo.maxRange * (0.82 + nav.solutionRating * 0.18) &&
@@ -7176,11 +7200,16 @@ function fireTorpedo() {
     resolvedSolution.launchPoint ||
     getTubeWorldPosition(firingTube?.id, sub) || {
       x: sub.x,
-      y: sub.y
+      y: sub.y,
+      facing: sub.heading
     };
   const fireLife = (usesTDC && state.tdc.range !== null)
-    ? (state.tdc.parallaxRange ?? state.tdc.range) / knotsToWorldSpeed(torpedo.speedKt) + 12
-    : resolvedSolution.interceptTime + 12;
+    ? (resolvedSolution.runDistanceEstimate ?? (state.tdc.parallaxRange ?? state.tdc.range)) /
+        knotsToWorldSpeed(torpedo.speedKt) +
+      12
+    : (resolvedSolution.runDistanceEstimate ?? resolvedSolution.interceptRange) /
+        Math.max(0.1, knotsToWorldSpeed(torpedo.speedKt)) +
+      12;
 
   firingTube.loaded = false;
   sub.detection = clamp(sub.detection + 0.14, 0, 1);
@@ -7203,7 +7232,7 @@ function fireTorpedo() {
     id: `torpedo-${Math.random().toString(16).slice(2)}`,
     x: launchPoint.x,
     y: launchPoint.y,
-    heading: fireHeading,
+    heading: launchPoint.facing ?? sub.heading,
     speed: knotsToWorldSpeed(torpedo.speedKt),
     traveled: 0,
     maxRange: torpedo.maxRange,
@@ -7212,7 +7241,14 @@ function fireTorpedo() {
     targetId: target.contact.id,
     life: fireLife,
     interceptCountdown: resolvedSolution.interceptTime,
-    hitChance: computeTorpedoHitChance(resolvedSolution, usesTDC)
+    hitChance: computeTorpedoHitChance(resolvedSolution, usesTDC),
+    motionPhase: (resolvedSolution.initialStraightMeters || 0) > 0 ? "startup" : "turn",
+    startupRemaining: resolvedSolution.initialStraightMeters || 0,
+    turnRadiusMeters: resolvedSolution.turnRadiusMeters || state.tdc.runProfile.turnRadiusMeters,
+    turnRemainingAngle: Math.abs(normalizeTurnDelta(fireHeading - (launchPoint.facing ?? sub.heading))),
+    turnDirection: normalizeTurnDelta(fireHeading - (launchPoint.facing ?? sub.heading)) >= 0 ? 1 : -1,
+    finalHeading: fireHeading,
+    profileDistance: 0
   });
   addLog(
     `雷撃。${torpedo.label}、管 ${firingTube.label} から ${contactLabel(target.contact)} へ進角 ${formatSigned(
@@ -7677,6 +7713,13 @@ function computeTorpedoHitChance(solution, usesTDC) {
     sub.depth >= UBOAT_CLASS.torpedoDepthMin && sub.depth <= UBOAT_CLASS.torpedoDepthMax ? 1 : 0.65;
   const prepFactor = seq.outerDoorOpen ? 1 : 0.72;
   const stealthFactor = (state.silentRunning ? 1.04 : 0.98) * torpedo.stealthFactor;
+  const startupPenalty = clamp(
+    1 -
+      (solution.initialStraightMeters || 0) / Math.max(120, solution.range || solution.parallaxRange || 1) * 0.85 -
+      Math.abs(solution.gyroAngle || 0) / 180 * 0.18,
+    0.68,
+    1
+  );
   const baseChance = clamp(
     solution.solutionRating *
       rangeFactor *
@@ -7689,7 +7732,8 @@ function computeTorpedoHitChance(solution, usesTDC) {
       tdcFactor *
       depthFactor *
       prepFactor *
-      stealthFactor,
+      stealthFactor *
+      startupPenalty,
     0,
     0.97
   );
@@ -7719,6 +7763,54 @@ function computeTorpedoHitChance(solution, usesTDC) {
     state.difficulty === "historical" ? 0.22 : 0.28,
     0.98
   );
+}
+
+function normalizeTurnDelta(delta) {
+  return normalizeAngle(delta);
+}
+
+function advanceTorpedoAlongProfile(torpedo, distanceStep) {
+  let remaining = distanceStep;
+  while (remaining > 0.0001) {
+    if (torpedo.motionPhase === "startup" && (torpedo.startupRemaining ?? 0) > 0) {
+      const move = Math.min(remaining, torpedo.startupRemaining);
+      torpedo.x += Math.cos(toRadians(torpedo.heading)) * move;
+      torpedo.y += Math.sin(toRadians(torpedo.heading)) * move;
+      torpedo.startupRemaining -= move;
+      torpedo.profileDistance = (torpedo.profileDistance || 0) + move;
+      remaining -= move;
+      if (torpedo.startupRemaining <= 0.0001) {
+        torpedo.motionPhase = (torpedo.turnRemainingAngle ?? 0) > 0.1 ? "turn" : "terminal";
+      }
+      continue;
+    }
+
+    if (torpedo.motionPhase === "turn" && (torpedo.turnRemainingAngle ?? 0) > 0.1) {
+      const radius = Math.max(1, torpedo.turnRadiusMeters || 95);
+      const maxDeltaDeg = (remaining / radius) * (180 / Math.PI);
+      const deltaDeg = Math.min(maxDeltaDeg, torpedo.turnRemainingAngle);
+      const turnSign = torpedo.turnDirection || 1;
+      const midHeading = normalizeAngle(torpedo.heading + turnSign * deltaDeg * 0.5);
+      const arcDistance = radius * toRadians(deltaDeg);
+      torpedo.x += Math.cos(toRadians(midHeading)) * arcDistance;
+      torpedo.y += Math.sin(toRadians(midHeading)) * arcDistance;
+      torpedo.heading = normalizeAngle(torpedo.heading + turnSign * deltaDeg);
+      torpedo.turnRemainingAngle -= deltaDeg;
+      torpedo.profileDistance = (torpedo.profileDistance || 0) + arcDistance;
+      remaining -= arcDistance;
+      if (torpedo.turnRemainingAngle <= 0.1) {
+        torpedo.heading = torpedo.finalHeading;
+        torpedo.motionPhase = "terminal";
+      }
+      continue;
+    }
+
+    torpedo.motionPhase = "terminal";
+    torpedo.x += Math.cos(toRadians(torpedo.heading)) * remaining;
+    torpedo.y += Math.sin(toRadians(torpedo.heading)) * remaining;
+    torpedo.profileDistance = (torpedo.profileDistance || 0) + remaining;
+    remaining = 0;
+  }
 }
 
 function resolveTorpedoHit(contact) {
@@ -7762,8 +7854,7 @@ function updateTorpedoes(deltaTime) {
     torpedo.interceptCountdown = Math.max(0, (torpedo.interceptCountdown ?? 0) - deltaTime);
     const previous = { x: torpedo.x, y: torpedo.y };
     const step = torpedo.speed * deltaTime;
-    torpedo.x += Math.cos(toRadians(torpedo.heading)) * step;
-    torpedo.y += Math.sin(toRadians(torpedo.heading)) * step;
+    advanceTorpedoAlongProfile(torpedo, step);
     torpedo.traveled += step;
     torpedo.life -= deltaTime;
 
@@ -7805,7 +7896,11 @@ function updateTorpedoes(deltaTime) {
       continue;
     }
 
-    if (torpedo.traveled >= (torpedo.maxRange ?? getActiveTorpedoSpec().maxRange) || torpedo.life <= 0) {
+    if (
+      (torpedo.profileDistance ?? torpedo.traveled) >=
+        (torpedo.maxRange ?? getActiveTorpedoSpec().maxRange) ||
+      torpedo.life <= 0
+    ) {
       state.torpedoSequence = {
         ...createTorpedoSequenceState(state.torpedoSequence.selectedMode),
         stage: TORPEDO_SEQUENCE.assessing,
@@ -9739,7 +9834,9 @@ function updateTDCDisplay() {
         `観測 方位 ${formatHeading(solution.rawBearing)} / 距離 ${Math.round(solution.rawRange)}m / ` +
         `補正 方位 ${formatHeading(solution.parallaxBearing)} / 距離 ${Math.round(solution.parallaxRange)}m / ` +
         `会敵 ${solution.interceptTime.toFixed(1)}s / 予想到達点 方位 ${formatHeading(solution.leadBearing)} / ` +
-        `会敵距離 ${Math.round(solution.interceptRange)}m / ${solution.aftShot ? "後方射点" : "前方射点"} / ${formatTubeGeometrySummary()}`;
+        `会敵距離 ${Math.round(solution.interceptRange)}m / 初動 ${Math.round(solution.initialStraightMeters || 0)}m / ` +
+        `旋回半径 ${Math.round(solution.turnRadiusMeters || 0)}m / 予想走行 ${Math.round(solution.runDistanceEstimate || solution.interceptRange)}m / ` +
+        `${solution.aftShot ? "後方射点" : "前方射点"} / ${formatTubeGeometrySummary()}`;
     } else if (tdc.absoluteFireBearing !== null && tdc.range !== null) {
       tdcSolutionNoteNode.textContent =
         `予想到達点 方位 ${formatHeading(tdc.absoluteFireBearing)} / 距離 ${Math.round(tdc.range)}m。` +
