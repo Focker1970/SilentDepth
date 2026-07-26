@@ -301,6 +301,11 @@ const TONNAGE_BY_TYPE = {
   flagship: 9000,
   escort: 1800
 };
+const TARGET_LENGTH_BY_TYPE = {
+  convoy: 118,
+  flagship: 152,
+  escort: 102
+};
 const CAMPAIGN_SAVE_KEY = "silentdepth-campaign-save-v1";
 const DEPTH_BANDS = {
   surfaced: 1,
@@ -2380,6 +2385,107 @@ function getTubeSelectModeLabel(mode = state.torpedoSequence?.tubeSelectMode) {
 
 function supportsManualSingleTubeControl(seq = state.torpedoSequence) {
   return (seq?.captainFirePattern || "single") === "single";
+}
+
+function getContactLengthMeters(contact) {
+  if (!contact) return 120;
+  return TARGET_LENGTH_BY_TYPE[contact.type] || 120;
+}
+
+function plannedSalvoShotCount(seq = state.torpedoSequence) {
+  return seq?.captainFirePattern === "salvo3" ? 3 : seq?.captainFirePattern === "salvo2" ? 2 : 1;
+}
+
+function computeSalvoSpread(solution, contact = solution?.contact, seq = state.torpedoSequence) {
+  const shotCount = plannedSalvoShotCount(seq);
+  if (!solution || !contact || shotCount <= 1) {
+    return {
+      shotCount,
+      totalSpreadDeg: 0,
+      offsetsDeg: [0]
+    };
+  }
+  const rangeMeters = Math.max(
+    120,
+    solution.parallaxRange || solution.interceptRange || solution.range || distance(state.submarine, contact)
+  );
+  const targetLengthMeters = getContactLengthMeters(contact);
+  const visibleAngleDeg = ((2 * Math.atan(targetLengthMeters / (2 * rangeMeters))) * 180) / Math.PI;
+  const confidencePenalty = clamp(1 - (solution.solutionRating ?? 0.72), 0, 1);
+  const errorMarginDeg = 0.35 + confidencePenalty * 0.95;
+  const totalSpreadDeg = clamp(visibleAngleDeg + errorMarginDeg, 0.4, 8.5);
+  const offsetsDeg =
+    shotCount === 2
+      ? [-totalSpreadDeg * 0.5, totalSpreadDeg * 0.5]
+      : [-totalSpreadDeg * 0.5, 0, totalSpreadDeg * 0.5];
+  return {
+    shotCount,
+    totalSpreadDeg,
+    offsetsDeg
+  };
+}
+
+function getSalvoCandidateTubes(contact, count) {
+  const preferredArc = isAftShot(contact, state.submarine) ? "stern" : "bow";
+  const loadedPreferred = (state.submarine.torpedoTubes || []).filter(
+    (tube) => tube.arc === preferredArc && tube.loaded
+  );
+  const loadedFallback = (state.submarine.torpedoTubes || []).filter((tube) => tube.loaded);
+  const bank = loadedPreferred.length ? loadedPreferred : loadedFallback;
+  const selectedTube = findTubeById(state.torpedoSequence.selectedTubeId, state.submarine);
+  const ordered = [];
+  if (selectedTube && bank.some((tube) => tube.id === selectedTube.id)) {
+    ordered.push(selectedTube);
+  }
+  for (const tube of bank) {
+    if (!ordered.some((entry) => entry.id === tube.id)) {
+      ordered.push(tube);
+    }
+  }
+  return ordered.slice(0, count);
+}
+
+function buildSalvoPreviewPaths(preview) {
+  const activeSolution = preview?.activeSolution;
+  const contact = preview?.contact;
+  const shotCount = plannedSalvoShotCount();
+  if (!preview || !activeSolution || !contact || shotCount <= 1) return [];
+  const spread = computeSalvoSpread(activeSolution, contact);
+  const candidateTubes = getSalvoCandidateTubes(contact, spread.offsetsDeg.length);
+  return spread.offsetsDeg.map((offsetDeg, index) => {
+    const tube = candidateTubes[index] || candidateTubes[candidateTubes.length - 1] || null;
+    const launchStart =
+      (tube && getTubeWorldPosition(tube.id, state.submarine)) ||
+      preview.start || {
+        x: state.submarine.x,
+        y: state.submarine.y,
+        facing: state.submarine.heading
+      };
+    const salvoBearing = normalizeAngle(preview.courseBearing + offsetDeg);
+    const startupDistance = Math.min(activeSolution.initialStraightMeters ?? 0, preview.runDistance);
+    const startupEnd = {
+      x: launchStart.x + Math.cos(toRadians(launchStart.facing ?? state.submarine.heading)) * startupDistance,
+      y: launchStart.y + Math.sin(toRadians(launchStart.facing ?? state.submarine.heading)) * startupDistance
+    };
+    const end = {
+      x: launchStart.x + Math.cos(toRadians(salvoBearing)) * preview.runDistance,
+      y: launchStart.y + Math.sin(toRadians(salvoBearing)) * preview.runDistance
+    };
+    const interceptPoint = {
+      x: launchStart.x + Math.cos(toRadians(salvoBearing)) * preview.plannedRange,
+      y: launchStart.y + Math.sin(toRadians(salvoBearing)) * preview.plannedRange
+    };
+    return {
+      tubeId: tube?.id || null,
+      tubeLabel: tube?.label || "--",
+      offsetDeg,
+      spreadDeg: spread.totalSpreadDeg,
+      start: launchStart,
+      startupEnd,
+      end,
+      interceptPoint
+    };
+  });
 }
 
 function getCaptainDesignatedContact() {
@@ -8906,6 +9012,14 @@ function getTorpedoPreview() {
     x: launchStart.x + Math.cos(toRadians(courseBearing)) * runDistance,
     y: launchStart.y + Math.sin(toRadians(courseBearing)) * runDistance
   };
+  const salvoPaths = buildSalvoPreviewPaths({
+    contact,
+    activeSolution,
+    start: launchStart,
+    courseBearing,
+    plannedRange,
+    runDistance
+  });
 
   return {
     contact,
@@ -8927,7 +9041,8 @@ function getTorpedoPreview() {
     gyroAngle: usesTDC
       ? tdcSolution?.gyroAngle ?? tdc.gyroAngle
       : shot?.gyroAngle ?? null,
-    activeSolution
+    activeSolution,
+    salvoPaths
   };
 }
 
@@ -8995,6 +9110,30 @@ function drawTorpedoPreview(camera) {
   ctx.lineTo(endPoint.x, endPoint.y);
   ctx.stroke();
 
+  if (preview.salvoPaths?.length > 1) {
+    ctx.save();
+    ctx.setLineDash([6, 6]);
+    ctx.lineWidth = 1.5;
+    preview.salvoPaths.forEach((path, index) => {
+      if (Math.abs(path.offsetDeg) < 0.01) return;
+      const salvoStart = toScreen(path.start.x, path.start.y, camera);
+      const salvoStartupEnd = toScreen(path.startupEnd.x, path.startupEnd.y, camera);
+      const salvoEnd = toScreen(path.end.x, path.end.y, camera);
+      const salvoHit = toScreen(path.interceptPoint.x, path.interceptPoint.y, camera);
+      ctx.strokeStyle = index % 2 === 0 ? "rgba(255, 214, 124, 0.78)" : "rgba(141, 219, 237, 0.76)";
+      ctx.beginPath();
+      ctx.moveTo(salvoStart.x, salvoStart.y);
+      ctx.lineTo(salvoStartupEnd.x, salvoStartupEnd.y);
+      ctx.lineTo(salvoEnd.x, salvoEnd.y);
+      ctx.stroke();
+      ctx.fillStyle = index % 2 === 0 ? "rgba(255, 214, 124, 0.9)" : "rgba(141, 219, 237, 0.88)";
+      ctx.beginPath();
+      ctx.arc(salvoHit.x, salvoHit.y, 4, 0, Math.PI * 2);
+      ctx.fill();
+    });
+    ctx.restore();
+  }
+
   ctx.fillStyle = "rgba(247, 200, 122, 0.95)";
   ctx.beginPath();
   ctx.arc(correctedStart.x, correctedStart.y, 3.5, 0, Math.PI * 2);
@@ -9028,9 +9167,18 @@ function drawTorpedoPreview(camera) {
     interceptPoint.x + 12,
     interceptPoint.y + 18
   );
+  if (preview.salvoPaths?.length > 1) {
+    const spreadDeg = preview.salvoPaths[0]?.spreadDeg ?? 0;
+    ctx.font = "11px Avenir Next, Hiragino Sans, sans-serif";
+    ctx.fillText(
+      `${getCaptainFirePatternLabel()} / 散開 ${spreadDeg.toFixed(1)}°`,
+      interceptPoint.x + 12,
+      interceptPoint.y + 34
+    );
+  }
   if (!previewReady) {
     ctx.font = "11px Avenir Next, Hiragino Sans, sans-serif";
-    ctx.fillText(fireStatus.label, interceptPoint.x + 12, interceptPoint.y + 34);
+    ctx.fillText(fireStatus.label, interceptPoint.x + 12, interceptPoint.y + (preview.salvoPaths?.length > 1 ? 50 : 34));
   }
   ctx.restore();
 }
@@ -9912,6 +10060,26 @@ function drawTheatrePlot() {
       ctx2.lineTo(startupEnd.x, startupEnd.y);
       ctx2.lineTo(end.x, end.y);
       ctx2.stroke();
+      if (preview.salvoPaths?.length > 1) {
+        preview.salvoPaths.forEach((path, index) => {
+          if (Math.abs(path.offsetDeg) < 0.01) return;
+          const salvoStart = theatrePoint(path.start.x, path.start.y, width, height);
+          const salvoStartupEnd = theatrePoint(path.startupEnd.x, path.startupEnd.y, width, height);
+          const salvoEnd = theatrePoint(path.end.x, path.end.y, width, height);
+          const salvoHit = theatrePoint(path.interceptPoint.x, path.interceptPoint.y, width, height);
+          ctx2.strokeStyle = index % 2 === 0 ? "rgba(255, 214, 124, 0.78)" : "rgba(141, 219, 237, 0.76)";
+          ctx2.lineWidth = 1.4;
+          ctx2.beginPath();
+          ctx2.moveTo(salvoStart.x, salvoStart.y);
+          ctx2.lineTo(salvoStartupEnd.x, salvoStartupEnd.y);
+          ctx2.lineTo(salvoEnd.x, salvoEnd.y);
+          ctx2.stroke();
+          ctx2.fillStyle = index % 2 === 0 ? "rgba(255, 214, 124, 0.9)" : "rgba(141, 219, 237, 0.88)";
+          ctx2.beginPath();
+          ctx2.arc(salvoHit.x, salvoHit.y, 3.2, 0, Math.PI * 2);
+          ctx2.fill();
+        });
+      }
       ctx2.setLineDash([]);
       ctx2.fillStyle = state.torpedoSequence.tubeReady ? "#7ce8a6" : "#f7c87a";
       ctx2.beginPath();
@@ -9933,6 +10101,11 @@ function drawTheatrePlot() {
       ctx2.fillText("補正", correctedEnd.x + 6, correctedEnd.y + 12);
       ctx2.fillStyle = state.torpedoSequence.tubeReady ? "#dfffe9" : "#fff1c9";
       ctx2.fillText("実走行", end.x + 6, end.y - 6);
+      if (preview.salvoPaths?.length > 1) {
+        const spreadDeg = preview.salvoPaths[0]?.spreadDeg ?? 0;
+        ctx2.fillStyle = "#ffeec4";
+        ctx2.fillText(`${getCaptainFirePatternLabel()} / 散開 ${spreadDeg.toFixed(1)}°`, hit.x + 8, hit.y + 18);
+      }
     }
   } else if (state.station === "navigation") {
     const prediction = navigationPlotPrediction();
