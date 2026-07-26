@@ -9119,7 +9119,10 @@ function getTorpedoPreview() {
     runDistance
   });
 
-  return {
+  const interceptPoint = usesTDC
+    ? tdcSolution?.interceptPoint || actualEnd
+    : shot?.interceptPoint || actualEnd;
+  const previewPayload = {
     contact,
     usesTDC,
     torpedoLabel: torpedo.label,
@@ -9133,20 +9136,45 @@ function getTorpedoPreview() {
     correctedEnd,
     startupEnd,
     runDistance,
-    interceptPoint: usesTDC
-      ? tdcSolution?.interceptPoint || actualEnd
-      : shot?.interceptPoint || actualEnd,
+    interceptPoint,
     gyroAngle: usesTDC
       ? tdcSolution?.gyroAngle ?? tdc.gyroAngle
       : shot?.gyroAngle ?? null,
     activeSolution,
     salvoPaths
   };
+
+  if (
+    !isFinitePoint(previewPayload.start) ||
+    !isFinitePoint(previewPayload.end) ||
+    !isFinitePoint(previewPayload.observationStart) ||
+    !isFinitePoint(previewPayload.observationEnd) ||
+    !isFinitePoint(previewPayload.correctedStart) ||
+    !isFinitePoint(previewPayload.correctedEnd) ||
+    !isFinitePoint(previewPayload.startupEnd) ||
+    !isFinitePoint(previewPayload.interceptPoint)
+  ) {
+    return null;
+  }
+
+  return previewPayload;
 }
 
 function drawTorpedoPreview(camera) {
   const preview = getTorpedoPreview();
   if (!preview) return;
+  if (
+    !isFinitePoint(preview.start) ||
+    !isFinitePoint(preview.end) ||
+    !isFinitePoint(preview.interceptPoint) ||
+    !isFinitePoint(preview.observationStart) ||
+    !isFinitePoint(preview.observationEnd) ||
+    !isFinitePoint(preview.correctedStart) ||
+    !isFinitePoint(preview.correctedEnd) ||
+    !isFinitePoint(preview.startupEnd)
+  ) {
+    return;
+  }
   const fireStatus = selectedTorpedoFireStatus();
   const previewReady = fireStatus.ready && state.torpedoSequence.tubeReady;
   const previewPreparing =
@@ -10014,6 +10042,10 @@ function theatrePoint(x, y, width, height, padding = 16) {
   };
 }
 
+function isFinitePoint(point) {
+  return Boolean(point) && Number.isFinite(point.x) && Number.isFinite(point.y);
+}
+
 function drawTheatrePlot() {
   if (!theatrePlotCanvas || !theatrePlotCtx || !theatrePlotCardNode) return;
 
@@ -10128,6 +10160,18 @@ function drawTheatrePlot() {
       ctx2.fill();
     }
     if (preview) {
+      if (
+        !isFinitePoint(preview.start) ||
+        !isFinitePoint(preview.end) ||
+        !isFinitePoint(preview.interceptPoint) ||
+        !isFinitePoint(preview.observationStart) ||
+        !isFinitePoint(preview.observationEnd) ||
+        !isFinitePoint(preview.correctedStart) ||
+        !isFinitePoint(preview.correctedEnd) ||
+        !isFinitePoint(preview.startupEnd)
+      ) {
+        return;
+      }
       const start = theatrePoint(preview.start.x, preview.start.y, width, height);
       const end = theatrePoint(preview.end.x, preview.end.y, width, height);
       const hit = theatrePoint(preview.interceptPoint.x, preview.interceptPoint.y, width, height);
