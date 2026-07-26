@@ -826,8 +826,17 @@ function createTorpedoSequenceState(selectedMode = "g7a_medium") {
   return {
     stage: TORPEDO_SEQUENCE.idle,
     selectedMode,
+    captainDesignatedTargetId: null,
+    captainFirePattern: "single",
+    captainFireAuthorized: false,
+    tubeSelectMode: "auto",
     selectedTargetId: null,
     selectedTubeId: null,
+    selectedTubeIds: [],
+    reservedTubeIds: [],
+    plannedShotSolutions: [],
+    salvoSpreadMode: "auto",
+    salvoSpreadDeg: null,
     dataEntered: false,
     tubeReady: false,
     lastFiredTargetId: null,
@@ -2346,6 +2355,91 @@ function formatTubeGeometrySummary(tubeId = state.tdc.tubeId, sub = state.submar
   const world = getTubeWorldPosition(tubeId, sub);
   if (!world) return "発射管基準点 未設定";
   return `管 ${tubeLabelById(tubeId)} / 艦基準 x${world.localX.toFixed(1)}m y${world.localY.toFixed(1)}m / 発射方位 ${formatHeading(world.facing)}`;
+}
+
+function getCaptainFirePatternLabel(pattern = state.torpedoSequence?.captainFirePattern) {
+  return pattern === "salvo2" ? "斉射2" : pattern === "salvo3" ? "斉射3" : "単射";
+}
+
+function getTubeSelectModeLabel(mode = state.torpedoSequence?.tubeSelectMode) {
+  return mode === "manual" ? "手動" : "自動";
+}
+
+function copyTorpedoCommandState(source, target) {
+  target.captainDesignatedTargetId = source?.captainDesignatedTargetId ?? null;
+  target.captainFirePattern = source?.captainFirePattern ?? "single";
+  target.captainFireAuthorized = source?.captainFireAuthorized ?? false;
+  target.tubeSelectMode = source?.tubeSelectMode ?? "auto";
+  target.selectedTubeIds = [...(source?.selectedTubeIds || [])];
+  target.reservedTubeIds = [...(source?.reservedTubeIds || [])];
+  target.plannedShotSolutions = [...(source?.plannedShotSolutions || [])];
+  target.salvoSpreadMode = source?.salvoSpreadMode ?? "auto";
+  target.salvoSpreadDeg = source?.salvoSpreadDeg ?? null;
+  return target;
+}
+
+function syncPlannedTubeState(seq = state.torpedoSequence, options = {}) {
+  const { preserveManual = false, clearPlans = false } = options;
+  const manualSelection = preserveManual ? [...(seq.selectedTubeIds || [])] : [];
+  const primaryTubeId = seq.selectedTubeId || null;
+  seq.selectedTubeIds =
+    preserveManual && manualSelection.length
+      ? manualSelection
+      : primaryTubeId
+        ? [primaryTubeId]
+        : [];
+  seq.reservedTubeIds = [...seq.selectedTubeIds];
+  if (clearPlans) {
+    seq.plannedShotSolutions = [];
+  }
+}
+
+function clearTorpedoExecutionState(seq = state.torpedoSequence, options = {}) {
+  const { preserveManual = false } = options;
+  seq.dataEntered = false;
+  seq.tubeReady = false;
+  seq.flooded = false;
+  seq.equalized = false;
+  seq.outerDoorOpen = false;
+  seq.prepMode = null;
+  seq.prepSteps = [];
+  seq.prepStepIndex = -1;
+  seq.prepStepRemaining = 0;
+  seq.postFireRemaining = 0;
+  syncPlannedTubeState(seq, { preserveManual, clearPlans: true });
+}
+
+function resolveAssignedTubeForContact(contact, preferCurrent = false) {
+  const seq = state.torpedoSequence;
+  if (seq.tubeSelectMode === "manual") {
+    const manualCandidates = (seq.selectedTubeIds?.length ? seq.selectedTubeIds : [seq.selectedTubeId]).filter(Boolean);
+    const manualTube =
+      manualCandidates
+        .map((tubeId) => findTubeById(tubeId, state.submarine))
+        .find(Boolean) || null;
+    if (manualTube) {
+      return manualTube;
+    }
+  }
+  return chooseTubeForContact(contact, preferCurrent);
+}
+
+function buildPostFireTorpedoSequence(targetId, tubeId, postFireRemaining) {
+  const next = copyTorpedoCommandState(
+    state.torpedoSequence,
+    createTorpedoSequenceState(state.torpedoSequence.selectedMode)
+  );
+  next.stage = TORPEDO_SEQUENCE.assessing;
+  next.lastFiredTargetId = targetId;
+  next.lastFiredTubeId = tubeId;
+  next.postFireRemaining = postFireRemaining;
+  next.captainFireAuthorized = false;
+  next.selectedTargetId = null;
+  next.selectedTubeId = null;
+  next.selectedTubeIds = [];
+  next.reservedTubeIds = [];
+  next.plannedShotSolutions = [];
+  return next;
 }
 
 function estimateTorpedoRunDistance(interceptRange, gyroAngle, runProfile = state.tdc.runProfile) {
@@ -5650,19 +5744,14 @@ function selectTorpedoTarget() {
   state.torpedoSequence.selectedTargetId = focusedContact
     ? focusedContact.id
     : bestShot.contact.id;
+  state.torpedoSequence.captainDesignatedTargetId = state.torpedoSequence.selectedTargetId;
+  state.torpedoSequence.captainFireAuthorized = false;
   const selectedContact = focusedContact || bestShot.contact;
-  state.torpedoSequence.selectedTubeId = chooseTubeForContact(selectedContact, false)?.id ?? null;
+  state.torpedoSequence.selectedTubeId = resolveAssignedTubeForContact(selectedContact, false)?.id ?? null;
   syncTDCLaunchGeometry(state.torpedoSequence.selectedTubeId);
-  state.torpedoSequence.dataEntered = false;
-  state.torpedoSequence.tubeReady = false;
-  state.torpedoSequence.flooded = false;
-  state.torpedoSequence.equalized = false;
-  state.torpedoSequence.outerDoorOpen = false;
-  state.torpedoSequence.prepMode = null;
-  state.torpedoSequence.prepSteps = [];
-  state.torpedoSequence.prepStepIndex = -1;
-  state.torpedoSequence.prepStepRemaining = 0;
-  state.torpedoSequence.postFireRemaining = 0;
+  clearTorpedoExecutionState(state.torpedoSequence, {
+    preserveManual: state.torpedoSequence.tubeSelectMode === "manual"
+  });
   updateTorpedoSequenceStage();
   if (focusedContact) {
     addLog(
@@ -5698,7 +5787,7 @@ function enterTorpedoData() {
     state.torpedoSequence.selectedTargetId &&
     state.torpedoSequence.selectedTargetId === shot.contact.id;
   const previousTubeId = state.torpedoSequence.selectedTubeId;
-  const assignedTube = chooseTubeForContact(shot.contact, sameTarget);
+  const assignedTube = resolveAssignedTubeForContact(shot.contact, sameTarget);
   const preserveTubeReady =
     sameTarget &&
     previousTubeId === assignedTube?.id &&
@@ -5706,19 +5795,18 @@ function enterTorpedoData() {
     state.torpedoSequence.prepStepIndex < 0;
   state.torpedoSequence.selectedTubeId = assignedTube?.id ?? null;
   syncTDCLaunchGeometry(state.torpedoSequence.selectedTubeId);
+  syncPlannedTubeState(state.torpedoSequence, {
+    preserveManual: state.torpedoSequence.tubeSelectMode === "manual"
+  });
 
   state.tdc.targetId = shot.contact.id;
   computeTDCSolution();
   state.torpedoSequence.dataEntered = true;
   if (!preserveTubeReady) {
-    state.torpedoSequence.tubeReady = false;
-    state.torpedoSequence.flooded = false;
-    state.torpedoSequence.equalized = false;
-    state.torpedoSequence.outerDoorOpen = false;
-    state.torpedoSequence.prepMode = null;
-    state.torpedoSequence.prepSteps = [];
-    state.torpedoSequence.prepStepIndex = -1;
-    state.torpedoSequence.prepStepRemaining = 0;
+    clearTorpedoExecutionState(state.torpedoSequence, {
+      preserveManual: state.torpedoSequence.tubeSelectMode === "manual"
+    });
+    state.torpedoSequence.dataEntered = true;
   }
   updateTorpedoSequenceStage();
   emitGermanRepeater("torpedoDataEntered");
@@ -5766,13 +5854,14 @@ function prepareTorpedoTube() {
   }
 
   const seq = state.torpedoSequence;
-  const tube = chooseTubeForContact(shot.contact, true);
+  const tube = resolveAssignedTubeForContact(shot.contact, true);
   if (!tube) {
     setStatus("使用可能な発射管がない。", "bad");
     return;
   }
   seq.selectedTubeId = tube.id;
   syncTDCLaunchGeometry(seq.selectedTubeId);
+  syncPlannedTubeState(seq, { preserveManual: seq.tubeSelectMode === "manual" });
   emitGermanRepeater("torpedoPrepareOrder");
   emitGermanRepeater("torpedoPrepareAck");
   const surfaced = isSurfaced(sub);
@@ -5974,6 +6063,9 @@ function updateHud() {
   const stationMeta = STATIONS[state.station];
   const bestShot = getBestKnownTorpedoSolution();
   const selectedShot = getSelectedTorpedoSolution();
+  const firePatternLabel = getCaptainFirePatternLabel();
+  const tubeModeLabel = getTubeSelectModeLabel();
+  const fireAuthorizationLabel = state.torpedoSequence.captainFireAuthorized ? "発令済" : "未発令";
   const flagship = state.contacts.find(
     (contact) => contact.type === "flagship" && !contact.destroyed
   );
@@ -6409,7 +6501,7 @@ function updateHud() {
       : `${sonarAdvisor.detail} 艦内報告は方位・距離推定を優先。`;
 
   torpedoReportDetailNode.textContent = state.torpedoSequence.selectedTargetId
-    ? `報告: ${torpedoSpec.label} / ${selectedFire.label}。${selectedFire.detail} / ${formatTubeGeometrySummary(
+    ? `報告: ${torpedoSpec.label} / ${selectedFire.label}。${selectedFire.detail} / 発射形式 ${firePatternLabel} / 管選択 ${tubeModeLabel} / 艦長許可 ${fireAuthorizationLabel} / ${formatTubeGeometrySummary(
         state.torpedoSequence.selectedTubeId
       )}${
         state.tdc.parallaxBearing !== null && state.tdc.parallaxRange !== null
@@ -6450,8 +6542,8 @@ function updateHud() {
         : "射撃諸元待機";
   torpedoOpsNode.textContent =
     state.viewMode === "binocular"
-      ? "双眼鏡捕捉、TDC同期、推定採用、発射判断"
-      : "目標選定、進角確認、発射可否の判定";
+      ? `双眼鏡捕捉、TDC同期、推定採用、発射判断 / ${firePatternLabel} / ${tubeModeLabel}`
+      : `目標選定、進角確認、発射可否の判定 / ${firePatternLabel} / ${tubeModeLabel}`;
   torpedoReportNode.textContent =
     state.battlePhase === BATTLE_PHASES.alarmDive
       ? "急速潜航。発射管作業を止め安全確認。"
@@ -7859,13 +7951,11 @@ function resolveTorpedoHit(contact) {
     }
   }
 
-  state.torpedoSequence = {
-    ...createTorpedoSequenceState(state.torpedoSequence.selectedMode),
-    stage: TORPEDO_SEQUENCE.assessing,
-    lastFiredTargetId: contact.id,
-    lastFiredTubeId: state.torpedoSequence.lastFiredTubeId,
-    postFireRemaining: isSurfaced(state.submarine) ? 4 : 10
-  };
+  state.torpedoSequence = buildPostFireTorpedoSequence(
+    contact.id,
+    state.torpedoSequence.lastFiredTubeId,
+    isSurfaced(state.submarine) ? 4 : 10
+  );
 }
 
 function updateTorpedoes(deltaTime) {
@@ -7904,13 +7994,11 @@ function updateTorpedoes(deltaTime) {
         resolveTorpedoHit(target);
       } else {
         emitGermanRepeater("torpedoMiss");
-        state.torpedoSequence = {
-          ...createTorpedoSequenceState(state.torpedoSequence.selectedMode),
-          stage: TORPEDO_SEQUENCE.assessing,
-          lastFiredTargetId: torpedo.targetId,
-          lastFiredTubeId: state.torpedoSequence.lastFiredTubeId,
-          postFireRemaining: isSurfaced(state.submarine) ? 4 : 10
-        };
+        state.torpedoSequence = buildPostFireTorpedoSequence(
+          torpedo.targetId,
+          state.torpedoSequence.lastFiredTubeId,
+          isSurfaced(state.submarine) ? 4 : 10
+        );
         addLog(`魚雷は ${contactLabel(target)} を外れる。命中率 ${Math.round(effectiveChance * 100)}%。`);
         setStatus("雷撃失敗。敵は回避または信管不良。", "warning");
       }
@@ -7922,13 +8010,11 @@ function updateTorpedoes(deltaTime) {
         (torpedo.maxRange ?? getActiveTorpedoSpec().maxRange) ||
       torpedo.life <= 0
     ) {
-      state.torpedoSequence = {
-        ...createTorpedoSequenceState(state.torpedoSequence.selectedMode),
-        stage: TORPEDO_SEQUENCE.assessing,
-        lastFiredTargetId: torpedo.targetId,
-        lastFiredTubeId: state.torpedoSequence.lastFiredTubeId,
-        postFireRemaining: isSurfaced(state.submarine) ? 4 : 10
-      };
+      state.torpedoSequence = buildPostFireTorpedoSequence(
+        torpedo.targetId,
+        state.torpedoSequence.lastFiredTubeId,
+        isSurfaced(state.submarine) ? 4 : 10
+      );
       addLog("魚雷失走。会敵せず。");
       continue;
     }
