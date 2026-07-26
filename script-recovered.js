@@ -770,7 +770,10 @@ function drawFatalError(message) {
   ctx.font = "bold 20px Avenir Next, Hiragino Sans, sans-serif";
   ctx.fillText("Startup Error", 36, 54);
   ctx.font = "14px Avenir Next, Hiragino Sans, sans-serif";
-  ctx.fillText(String(message), 36, 82);
+  const lines = String(message).split("\n").slice(0, 6);
+  lines.forEach((line, index) => {
+    ctx.fillText(line, 36, 82 + index * 20);
+  });
 }
 
 const BATTLE_PHASES = {
@@ -2861,6 +2864,7 @@ function getTdcInvalidReasonLabel(tdc = state.tdc, torpedo = getActiveTorpedoSpe
 }
 
 function isAftShot(contact, sub = state.submarine) {
+  if (!contact || !sub) return false;
   const rel = normalizeAngle(bearing(sub, contact) - sub.heading);
   return Math.abs(rel) >= 105;
 }
@@ -7109,6 +7113,7 @@ function setStation(nextStation) {
 function resetGame() {
   const stage = currentStage();
   const stageSetup = stage.setup();
+  state.startupPhase = "resetGame:stage setup";
   stopVoicePlayback();
   audioState.lastVoiceAt.clear();
   audioState.recentVoiceAt.clear();
@@ -7231,10 +7236,15 @@ function resetGame() {
     strongerContactAtById: new Map()
   };
   state.contacts = stageSetup.contacts;
+  state.startupPhase = "resetGame:updateNavigationTacticalState";
   updateNavigationTacticalState();
+  state.startupPhase = "resetGame:buildSonarContacts";
   buildSonarContacts();
+  state.startupPhase = "resetGame:updateVisualContacts";
   updateVisualContacts();
+  state.startupPhase = "resetGame:updateDetectionState";
   updateDetectionState();
+  state.startupPhase = "resetGame:updateSubmergedLoop";
   updateSubmergedLoop();
   addLog(stage.introLog);
   updateReportingState();
@@ -7256,10 +7266,15 @@ function resetGame() {
     addLog("優先目標は中央の重要輸送船。駆逐艦は二隻。");
   }
   setStatus(stage.mission, "good");
+  state.startupPhase = "resetGame:updateBattlePhase";
   updateBattlePhase();
+  state.startupPhase = "resetGame:updateButtons";
   updateButtons();
+  state.startupPhase = "resetGame:updateHud";
   updateHud();
+  state.startupPhase = "resetGame:render";
   render();
+  state.startupPhase = "resetGame:complete";
 }
 
 function setViewMode(mode) {
@@ -11350,16 +11365,29 @@ window.addEventListener("keydown", (event) => {
 });
 
 try {
+  state.startupPhase = "bootstrap:drawFatalError";
   drawFatalError("JavaScript loaded. Initializing renderer...");
+  state.startupPhase = "bootstrap:ensureVoiceAssignments";
   ensureVoiceAssignments();
+  state.startupPhase = "bootstrap:syncSavePresence";
   syncSavePresence();
+  state.startupPhase = "bootstrap:loadOrReset";
   if (!loadCampaignSnapshot("auto")) {
     resetGame();
   }
+  state.startupPhase = "bootstrap:startFallbackLoop";
   startFallbackLoop();
+  state.startupPhase = "bootstrap:requestAnimationFrame";
   requestAnimationFrame(loop);
+  state.startupPhase = "bootstrap:complete";
 } catch (error) {
-  const message = error instanceof Error ? error.message : String(error);
+  const baseMessage = error instanceof Error ? error.message : String(error);
+  const stackLine =
+    error instanceof Error && error.stack
+      ? error.stack.split("\n").slice(0, 3).join(" | ")
+      : "";
+  const phase = state.startupPhase || "bootstrap:unknown";
+  const message = [`${phase}: ${baseMessage}`, stackLine].filter(Boolean).join("\n");
   state.runtimeError = message;
   drawFatalError(message);
   if (statusNode) {
