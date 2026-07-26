@@ -2485,7 +2485,17 @@ function buildSalvoPreviewPaths(preview) {
       end,
       interceptPoint
     };
-  });
+  }).filter((path) =>
+    path &&
+    Number.isFinite(path.start?.x) &&
+    Number.isFinite(path.start?.y) &&
+    Number.isFinite(path.startupEnd?.x) &&
+    Number.isFinite(path.startupEnd?.y) &&
+    Number.isFinite(path.end?.x) &&
+    Number.isFinite(path.end?.y) &&
+    Number.isFinite(path.interceptPoint?.x) &&
+    Number.isFinite(path.interceptPoint?.y)
+  );
 }
 
 function buildFirePlan(target, resolvedSolution, usesTDC, torpedo) {
@@ -9203,6 +9213,7 @@ function drawTorpedoPreview(camera) {
     ctx.setLineDash([6, 6]);
     ctx.lineWidth = 1.5;
     preview.salvoPaths.forEach((path, index) => {
+      if (!path?.start || !path?.startupEnd || !path?.end || !path?.interceptPoint) return;
       if (Math.abs(path.offsetDeg) < 0.01) return;
       const salvoStart = toScreen(path.start.x, path.start.y, camera);
       const salvoStartupEnd = toScreen(path.startupEnd.x, path.startupEnd.y, camera);
@@ -10150,6 +10161,7 @@ function drawTheatrePlot() {
       ctx2.stroke();
       if (preview.salvoPaths?.length > 1) {
         preview.salvoPaths.forEach((path, index) => {
+          if (!path?.start || !path?.startupEnd || !path?.end || !path?.interceptPoint) return;
           if (Math.abs(path.offsetDeg) < 0.01) return;
           const salvoStart = theatrePoint(path.start.x, path.start.y, width, height);
           const salvoStartupEnd = theatrePoint(path.startupEnd.x, path.startupEnd.y, width, height);
