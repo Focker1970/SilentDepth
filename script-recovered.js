@@ -838,7 +838,9 @@ const TORPEDO_RELOAD_TIME = {
 function createTorpedoTubeBank() {
   return TORPEDO_TUBES.map((tube) => ({
     ...tube,
-    loaded: true
+    loaded: true,
+    cooldownRemaining: 0,
+    cooldownReason: null
   }));
 }
 
@@ -2337,6 +2339,47 @@ function findTubeById(tubeId, sub = state.submarine) {
   return (sub.torpedoTubes || []).find((tube) => tube.id === tubeId) || null;
 }
 
+function isTubeCoolingDown(tube) {
+  return (tube?.cooldownRemaining || 0) > 0.05;
+}
+
+function tubeStatusMeta(tube, seq = state.torpedoSequence) {
+  if (!tube) {
+    return {
+      label: "--",
+      detail: "不明",
+      active: false,
+      loading: false,
+      processing: false,
+      cooling: false
+    };
+  }
+  const active = seq.selectedTubeId === tube.id;
+  const loading =
+    active &&
+    seq.prepStepIndex >= 0 &&
+    seq.prepSteps[seq.prepStepIndex]?.key === "reload";
+  const processing = active && seq.prepStepIndex >= 0 && !loading;
+  const cooling = isTubeCoolingDown(tube);
+  const detail = loading
+    ? "再装填"
+    : processing
+      ? "準備中"
+      : cooling
+        ? `${tube.cooldownReason || "再整列"} ${tube.cooldownRemaining.toFixed(1)}s`
+        : tube.loaded
+          ? "装填"
+          : "空";
+  return {
+    label: tube.label,
+    detail,
+    active,
+    loading,
+    processing,
+    cooling
+  };
+}
+
 function tubeLabelById(tubeId) {
   return TORPEDO_TUBES.find((tube) => tube.id === tubeId)?.label || "--";
 }
@@ -2430,9 +2473,11 @@ function computeSalvoSpread(solution, contact = solution?.contact, seq = state.t
 function getSalvoCandidateTubes(contact, count) {
   const preferredArc = isAftShot(contact, state.submarine) ? "stern" : "bow";
   const loadedPreferred = (state.submarine.torpedoTubes || []).filter(
-    (tube) => tube.arc === preferredArc && tube.loaded
+    (tube) => tube.arc === preferredArc && tube.loaded && !isTubeCoolingDown(tube)
   );
-  const loadedFallback = (state.submarine.torpedoTubes || []).filter((tube) => tube.loaded);
+  const loadedFallback = (state.submarine.torpedoTubes || []).filter(
+    (tube) => tube.loaded && !isTubeCoolingDown(tube)
+  );
   const bank = loadedPreferred.length ? loadedPreferred : loadedFallback;
   const selectedTube = findTubeById(state.torpedoSequence.selectedTubeId, state.submarine);
   const ordered = [];
@@ -2873,15 +2918,15 @@ function chooseTubeForContact(contact, preferCurrent = false) {
   const tubes = sub.torpedoTubes || [];
   const preferredArc = isAftShot(contact, sub) ? "stern" : "bow";
   const currentTube = preferCurrent ? findTubeById(state.torpedoSequence.selectedTubeId, sub) : null;
-  if (currentTube && currentTube.arc === preferredArc) {
+  if (currentTube && currentTube.arc === preferredArc && !isTubeCoolingDown(currentTube)) {
     return currentTube;
   }
-  const byArc = tubes.filter((tube) => tube.arc === preferredArc);
+  const byArc = tubes.filter((tube) => tube.arc === preferredArc && !isTubeCoolingDown(tube));
   return (
     byArc.find((tube) => tube.loaded) ||
     byArc[0] ||
-    tubes.find((tube) => tube.loaded) ||
-    tubes[0] ||
+    tubes.find((tube) => tube.loaded && !isTubeCoolingDown(tube)) ||
+    tubes.find((tube) => !isTubeCoolingDown(tube)) ||
     null
   );
 }
@@ -2903,20 +2948,8 @@ function tubeBankSummary() {
   const seq = state.torpedoSequence;
   return (state.submarine.torpedoTubes || [])
     .map((tube) => {
-      const active = seq.selectedTubeId === tube.id;
-      const loading =
-        active &&
-        seq.prepStepIndex >= 0 &&
-        seq.prepSteps[seq.prepStepIndex]?.key === "reload";
-      const processing = active && seq.prepStepIndex >= 0 && !loading;
-      const status = loading
-        ? "再装填"
-        : processing
-          ? "準備中"
-          : tube.loaded
-            ? "装填"
-            : "空";
-      return `${tube.label}${active ? "*" : ""} ${status}`;
+      const meta = tubeStatusMeta(tube, seq);
+      return `${meta.label}${meta.active ? "*" : ""} ${meta.detail}`;
     })
     .join(" / ");
 }
@@ -5836,18 +5869,27 @@ function updateButtons() {
   }
   for (const button of torpedoTubeButtons) {
     const tube = findTubeById(button.dataset.tubeId, state.submarine);
+    const tubeMeta = tubeStatusMeta(tube);
     const manualMode = state.torpedoSequence.tubeSelectMode === "manual" && manualSingleTubeControl;
     const selected = state.torpedoSequence.selectedTubeId === button.dataset.tubeId;
     setButtonState(button, "active", manualMode && selected);
-    setButtonState(button, "dim", !manualMode || !tube?.loaded);
+    setButtonState(button, "dim", !manualMode || !tube?.loaded || tubeMeta.cooling);
     button.disabled = !manualMode;
+    button.textContent = tube ? `${tube.label}${tubeMeta.cooling ? ` ${Math.ceil(tube.cooldownRemaining)}s` : ""}` : button.textContent;
     button.title = !manualMode
       ? manualSingleTubeControl
         ? "手動選定に切り替えると指定可能"
         : "単射時のみ手動指定可能"
-      : tube?.loaded
-        ? ""
-        : "この発射管は未装填";
+      : tubeMeta.cooling
+        ? `${tube.label} は${tubeMeta.cooldownReason || "再整列"}中`
+        : tube?.loaded
+          ? ""
+          : "この発射管は未装填";
+    if (manualMode && tubeMeta.cooling) {
+      button.title = `${tube.label} は${tubeMeta.cooldownReason || "再整列"}中。残り ${tube.cooldownRemaining.toFixed(1)} 秒`;
+    } else if (manualMode && !tube?.loaded) {
+      button.title = "この発射管は未装填";
+    }
   }
 
   const periscopeUsable = isPeriscopeDepth(state.submarine) || state.viewMode === "periscope";
@@ -6066,6 +6108,14 @@ function selectedTorpedoFireStatus() {
       ready: false,
       label: "発射管未選定",
       detail: "発射管を割り当てて準備を開始する。"
+    };
+  }
+
+  if (isTubeCoolingDown(selectedTube)) {
+    return {
+      ready: false,
+      label: "再整列中",
+      detail: `発射管 ${selectedTube.label} は ${selectedTube.cooldownReason || "再整列"} 中。残り ${selectedTube.cooldownRemaining.toFixed(1)} 秒。`
     };
   }
 
@@ -6294,6 +6344,10 @@ function prepareTorpedoTube() {
     setStatus("使用可能な発射管がない。", "bad");
     return;
   }
+  if (isTubeCoolingDown(tube)) {
+    setStatus(`発射管 ${tube.label} は ${tube.cooldownReason || "再整列"} 中。残り ${tube.cooldownRemaining.toFixed(1)} 秒。`, "warning");
+    return;
+  }
   seq.selectedTubeId = tube.id;
   syncTDCLaunchGeometry(seq.selectedTubeId);
   syncPlannedTubeState(seq, { preserveManual: seq.tubeSelectMode === "manual" });
@@ -6325,6 +6379,15 @@ function prepareTorpedoTube() {
 
 function updateTorpedoPreparation(deltaTime) {
   const seq = state.torpedoSequence;
+  for (const tube of state.submarine.torpedoTubes || []) {
+    if ((tube.cooldownRemaining || 0) > 0) {
+      tube.cooldownRemaining = Math.max(0, tube.cooldownRemaining - deltaTime);
+      if (tube.cooldownRemaining <= 0.05) {
+        tube.cooldownRemaining = 0;
+        tube.cooldownReason = null;
+      }
+    }
+  }
 
   if (seq.postFireRemaining > 0) {
     seq.postFireRemaining = Math.max(0, seq.postFireRemaining - deltaTime);
@@ -6555,6 +6618,7 @@ function updateHud() {
   state.navigationAdvice = navigationAdvisor;
   state.advisorHints = [sonarAdvisor.hint, navigationAdvisor.hint].filter(Boolean);
   updateTDCEstimates();
+  const activeTubeMeta = tubeStatusMeta(activeTube);
   const tubeStatusText = state.torpedoSequence.tubeReady
     ? `${activeTube ? `管 ${activeTube.label}` : "使用管"} / ${
         state.torpedoSequence.prepMode === "surfaced" ? "外扉開放済み" : "注水・均圧・外扉完了"
@@ -6569,6 +6633,10 @@ function updateHud() {
             : null;
         return currentStep
           ? `${activeTube ? `管 ${activeTube.label} / ` : ""}${currentStep.label} ${state.torpedoSequence.prepStepRemaining.toFixed(1)}s`
+          : activeTubeMeta.cooling
+            ? `管 ${activeTubeMeta.label} / ${activeTubeMeta.detail}`
+            : activeTube && !activeTube.loaded
+              ? `管 ${activeTube.label} / 再装填待ち`
           : state.torpedoSequence.dataEntered
             ? "準備待機"
             : "待機";
@@ -6905,7 +6973,15 @@ function updateHud() {
         : "未選定";
   }
   torpedoInputStatusNode.textContent = state.torpedoSequence.dataEntered ? "完了" : "未入力";
-  torpedoPrepareStatusNode.textContent = state.torpedoSequence.tubeReady ? "完了" : "未準備";
+  torpedoPrepareStatusNode.textContent = state.torpedoSequence.tubeReady
+    ? "完了"
+    : activeTubeMeta.loading
+      ? "再装填中"
+      : activeTubeMeta.processing
+        ? "準備中"
+        : activeTubeMeta.cooling
+          ? "再整列待ち"
+          : "未準備";
   if (torpedoTubeStatusNode) {
     torpedoTubeStatusNode.textContent = tubeStatusText;
   }
@@ -7784,6 +7860,10 @@ function fireTorpedo() {
   firePlan.forEach((entry) => {
     if (!entry.tube) return;
     entry.tube.loaded = false;
+    entry.tube.cooldownRemaining = isSurfaced(sub)
+      ? 6 + usedTubes.length * 1.4
+      : 14 + usedTubes.length * 2.4;
+    entry.tube.cooldownReason = "排水・再整列";
     usedTubes.push(entry.tube.label);
     state.torpedoesInWater.push({
       id: `torpedo-${Math.random().toString(16).slice(2)}`,
@@ -7814,7 +7894,10 @@ function fireTorpedo() {
   state.torpedoSequence.lastFiredTubeId = firePlan[firePlan.length - 1]?.tube?.id || state.torpedoSequence.selectedTubeId;
   state.torpedoSequence.tubeReady = false;
   state.torpedoSequence.captainFireAuthorized = false;
-  state.torpedoSequence.postFireRemaining = isSurfaced(sub) ? 6 + Math.max(0, firePlan.length - 1) * 1.4 : 14 + Math.max(0, firePlan.length - 1) * 2.4;
+  state.torpedoSequence.postFireRemaining = Math.max(
+    0,
+    ...firePlan.map((entry) => entry.tube?.cooldownRemaining || 0)
+  );
   state.torpedoSequence.selectedTubeIds = [];
   state.torpedoSequence.reservedTubeIds = [];
   state.torpedoSequence.plannedShotSolutions = [];
