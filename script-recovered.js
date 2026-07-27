@@ -2380,6 +2380,40 @@ function tubeStatusMeta(tube, seq = state.torpedoSequence) {
   };
 }
 
+function reloadPriorityQueue(contact = null, sub = state.submarine) {
+  const focusContact = contact || getCaptainDesignatedContact() || getPreferredTorpedoContact() || null;
+  const preferredArc = focusContact && isAftShot(focusContact, sub) ? "stern" : "bow";
+  return (sub.torpedoTubes || [])
+    .filter((tube) => !tube.loaded)
+    .map((tube) => {
+      const cooling = isTubeCoolingDown(tube);
+      const arcPriority = tube.arc === preferredArc ? 0 : 1;
+      const cooldownPriority = cooling ? 1 : 0;
+      return {
+        tube,
+        cooling,
+        arcPriority,
+        cooldownPriority
+      };
+    })
+    .sort((a, b) => {
+      if (a.cooldownPriority !== b.cooldownPriority) return a.cooldownPriority - b.cooldownPriority;
+      if (a.arcPriority !== b.arcPriority) return a.arcPriority - b.arcPriority;
+      return a.tube.label.localeCompare(b.tube.label, "ja");
+    });
+}
+
+function reloadPrioritySummary(contact = null, sub = state.submarine) {
+  const queue = reloadPriorityQueue(contact, sub);
+  if (!queue.length) return null;
+  return queue
+    .slice(0, 3)
+    .map((entry, index) =>
+      `${index + 1}.${entry.tube.label}${entry.cooling ? ` ${entry.tube.cooldownRemaining.toFixed(1)}s` : ""}`
+    )
+    .join(" -> ");
+}
+
 function tubeLabelById(tubeId) {
   return TORPEDO_TUBES.find((tube) => tube.id === tubeId)?.label || "--";
 }
@@ -6379,12 +6413,14 @@ function prepareTorpedoTube() {
 
 function updateTorpedoPreparation(deltaTime) {
   const seq = state.torpedoSequence;
+  let tubeCooldownCompleted = false;
   for (const tube of state.submarine.torpedoTubes || []) {
     if ((tube.cooldownRemaining || 0) > 0) {
       tube.cooldownRemaining = Math.max(0, tube.cooldownRemaining - deltaTime);
       if (tube.cooldownRemaining <= 0.05) {
         tube.cooldownRemaining = 0;
         tube.cooldownReason = null;
+        tubeCooldownCompleted = true;
       }
     }
   }
@@ -6400,6 +6436,14 @@ function updateTorpedoPreparation(deltaTime) {
       seq.selectedTubeId = null;
       seq.prepStepIndex = -1;
       seq.prepStepRemaining = 0;
+    }
+  }
+
+  if (tubeCooldownCompleted && seq.prepStepIndex < 0 && !seq.tubeReady) {
+    const priorityTube = reloadPriorityQueue(getSelectedTorpedoSolution()?.contact || null)[0]?.tube || null;
+    if (priorityTube && !priorityTube.loaded) {
+      seq.selectedTubeId = priorityTube.id;
+      syncTDCLaunchGeometry(seq.selectedTubeId);
     }
   }
 
@@ -6619,6 +6663,7 @@ function updateHud() {
   state.advisorHints = [sonarAdvisor.hint, navigationAdvisor.hint].filter(Boolean);
   updateTDCEstimates();
   const activeTubeMeta = tubeStatusMeta(activeTube);
+  const reloadQueueText = reloadPrioritySummary(selectedShot?.contact || bestShot?.contact || null, sub);
   const tubeStatusText = state.torpedoSequence.tubeReady
     ? `${activeTube ? `管 ${activeTube.label}` : "使用管"} / ${
         state.torpedoSequence.prepMode === "surfaced" ? "外扉開放済み" : "注水・均圧・外扉完了"
@@ -6636,10 +6681,12 @@ function updateHud() {
           : activeTubeMeta.cooling
             ? `管 ${activeTubeMeta.label} / ${activeTubeMeta.detail}`
             : activeTube && !activeTube.loaded
-              ? `管 ${activeTube.label} / 再装填待ち`
+              ? `管 ${activeTube.label} / 再装填待ち${reloadQueueText ? ` / 優先 ${reloadQueueText}` : ""}`
           : state.torpedoSequence.dataEntered
             ? "準備待機"
-            : "待機";
+            : reloadQueueText
+              ? `再装填優先 ${reloadQueueText}`
+              : "待機";
       })();
 
   state.phaseTrigger = trigger;
@@ -6968,6 +7015,8 @@ function updateHud() {
   if (torpedoSelectedTubeNode) {
     torpedoSelectedTubeNode.textContent = state.torpedoSequence.selectedTubeId
       ? `管 ${tubeLabelById(state.torpedoSequence.selectedTubeId)}`
+      : reloadQueueText
+        ? `推奨 ${reloadQueueText.split(" -> ")[0].replace(/^1\./, "管 ")}`
       : state.torpedoSequence.lastFiredTubeId
         ? `前回 管 ${tubeLabelById(state.torpedoSequence.lastFiredTubeId)}`
         : "未選定";
@@ -7001,7 +7050,9 @@ function updateHud() {
         : `会敵まで ${nextImpactTorpedo.interceptCountdown.toFixed(1)}s`
       : state.torpedoSequence.postFireRemaining > 0
         ? `排水・再整列 ${state.torpedoSequence.postFireRemaining.toFixed(1)}s`
-        : "なし";
+        : reloadQueueText
+          ? `再装填優先 ${reloadQueueText}`
+          : "なし";
   }
 
   sonarReportDetailNode.textContent = sonarAdvisor.detail;
@@ -7031,7 +7082,7 @@ function updateHud() {
         state.tdc.parallaxBearing !== null && state.tdc.parallaxRange !== null
           ? ` / 視差補正 ${formatHeading(state.tdc.parallaxBearing)} ${Math.round(state.tdc.parallaxRange)}m`
           : ""
-      }`
+      }${reloadQueueText ? ` / 再装填優先 ${reloadQueueText}` : ""}`
     : state.viewMode === "binocular" && binocularFocus
       ? `報告: 双眼鏡で ${contactLabel(binocularFocus)} を捕捉。方位 ${Math.round(
           normalizeAngle(bearing(sub, binocularFocus) - sub.heading)
