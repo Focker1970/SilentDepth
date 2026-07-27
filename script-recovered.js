@@ -859,6 +859,7 @@ function createTorpedoSequenceState(selectedMode = "g7a_medium") {
     plannedShotSolutions: [],
     salvoSpreadMode: "auto",
     salvoSpreadDeg: null,
+    lastFireReport: null,
     dataEntered: false,
     tubeReady: false,
     lastFiredTargetId: null,
@@ -2471,6 +2472,47 @@ function getContactLengthMeters(contact) {
   return TARGET_LENGTH_BY_TYPE[contact.type] || 120;
 }
 
+function getSalvoSpreadProfile(contact, rangeMeters, shotCount, solutionRating = 0.72) {
+  const targetLengthMeters = getContactLengthMeters(contact);
+  const visibleAngleDeg = ((2 * Math.atan(targetLengthMeters / (2 * rangeMeters))) * 180) / Math.PI;
+  const confidencePenalty = clamp(1 - solutionRating, 0, 1);
+  const targetFactor =
+    contact?.type === "flagship" ? 1.16 : contact?.type === "escort" ? 0.84 : 1.0;
+  const rangeFactor = clamp(0.74 + ((rangeMeters - 500) / 2300) * 0.58, 0.68, 1.34);
+  const shotFactor = shotCount >= 3 ? 1.08 : shotCount === 2 ? 1.0 : 0.94;
+  const geometryCoverDeg = visibleAngleDeg * targetFactor * rangeFactor * shotFactor;
+  const errorMarginDeg =
+    (contact?.type === "escort" ? 0.18 : contact?.type === "flagship" ? 0.28 : 0.22) +
+    confidencePenalty * (contact?.type === "escort" ? 0.44 : 0.62);
+  const minSpreadDeg = shotCount >= 3 ? 1.1 : 0.75;
+  const maxSpreadDeg = contact?.type === "escort" ? 4.8 : contact?.type === "flagship" ? 7.6 : 6.2;
+  const totalSpreadDeg = clamp(geometryCoverDeg + errorMarginDeg, minSpreadDeg, maxSpreadDeg);
+  return {
+    targetLengthMeters,
+    visibleAngleDeg,
+    targetFactor,
+    rangeFactor,
+    shotFactor,
+    errorMarginDeg,
+    totalSpreadDeg
+  };
+}
+
+function describeSalvoSpread(spreadProfile, shotCount, contact = null, rangeMeters = null) {
+  if (!spreadProfile || shotCount <= 1) return "単射";
+  const targetLabel =
+    contact?.type === "flagship" ? "大型目標" : contact?.type === "escort" ? "小型護衛" : "標準船腹";
+  const rangeLabel =
+    rangeMeters !== null
+      ? rangeMeters < 800
+        ? "近距離で締め"
+        : rangeMeters > 2000
+          ? "遠距離で広め"
+          : "中距離標準"
+      : "自動";
+  return `${shotCount}本 / ${targetLabel} / ${rangeLabel}`;
+}
+
 function plannedSalvoShotCount(seq = state.torpedoSequence) {
   return seq?.captainFirePattern === "salvo3" ? 3 : seq?.captainFirePattern === "salvo2" ? 2 : 1;
 }
@@ -2488,17 +2530,18 @@ function computeSalvoSpread(solution, contact = solution?.contact, seq = state.t
     120,
     solution.parallaxRange || solution.interceptRange || solution.range || distance(state.submarine, contact)
   );
-  const targetLengthMeters = getContactLengthMeters(contact);
-  const visibleAngleDeg = ((2 * Math.atan(targetLengthMeters / (2 * rangeMeters))) * 180) / Math.PI;
-  const confidencePenalty = clamp(1 - (solution.solutionRating ?? 0.72), 0, 1);
-  const errorMarginDeg = 0.35 + confidencePenalty * 0.95;
-  const totalSpreadDeg = clamp(visibleAngleDeg + errorMarginDeg, 0.4, 8.5);
+  const spreadProfile = getSalvoSpreadProfile(contact, rangeMeters, shotCount, solution.solutionRating ?? 0.72);
+  const totalSpreadDeg = spreadProfile.totalSpreadDeg;
   const offsetsDeg =
     shotCount === 2
       ? [-totalSpreadDeg * 0.5, totalSpreadDeg * 0.5]
       : [-totalSpreadDeg * 0.5, 0, totalSpreadDeg * 0.5];
   return {
     shotCount,
+    rangeMeters,
+    spreadBasis: describeSalvoSpread(spreadProfile, shotCount, contact, rangeMeters),
+    targetLengthMeters: spreadProfile.targetLengthMeters,
+    visibleAngleDeg: spreadProfile.visibleAngleDeg,
     totalSpreadDeg,
     offsetsDeg
   };
@@ -2694,6 +2737,7 @@ function copyTorpedoCommandState(source, target) {
   target.plannedShotSolutions = [...(source?.plannedShotSolutions || [])];
   target.salvoSpreadMode = source?.salvoSpreadMode ?? "auto";
   target.salvoSpreadDeg = source?.salvoSpreadDeg ?? null;
+  target.lastFireReport = source?.lastFireReport ? { ...source.lastFireReport } : null;
   return target;
 }
 
@@ -7055,12 +7099,15 @@ function updateHud() {
     const nextImpactTorpedo = [...state.torpedoesInWater]
       .filter((torpedo) => (torpedo.interceptCountdown ?? 0) > 0)
       .sort((a, b) => (a.interceptCountdown ?? Infinity) - (b.interceptCountdown ?? Infinity))[0] || null;
+    const lastFireReport = state.torpedoSequence.lastFireReport;
     torpedoPostStatusNode.textContent = nextImpactTorpedo
       ? state.torpedoSequence.postFireRemaining > 0
         ? `会敵まで ${nextImpactTorpedo.interceptCountdown.toFixed(1)}s / 排水・再整列 ${state.torpedoSequence.postFireRemaining.toFixed(1)}s`
         : `会敵まで ${nextImpactTorpedo.interceptCountdown.toFixed(1)}s`
       : state.torpedoSequence.postFireRemaining > 0
         ? `排水・再整列 ${state.torpedoSequence.postFireRemaining.toFixed(1)}s`
+        : lastFireReport
+          ? `${lastFireReport.patternLabel} / 散開 ${lastFireReport.spreadDeg.toFixed(1)}° / ${lastFireReport.spreadBasis}`
         : reloadQueueText
           ? `再装填優先 ${reloadQueueText}`
           : "なし";
@@ -7086,18 +7133,40 @@ function updateHud() {
       ? `${loopMeta.label}。${loopMeta.sonar} / ${sonarAdvisor.brief} / 艦内は方位・距離推定、グリッド報告は行わない。`
       : `${sonarAdvisor.detail} 艦内報告は方位・距離推定を優先。`;
 
+  const lastFireReport = state.torpedoSequence.lastFireReport;
   torpedoReportDetailNode.textContent = state.torpedoSequence.selectedTargetId
-    ? `報告: ${torpedoSpec.label} / ${selectedFire.label}。${selectedFire.detail} / 発射形式 ${firePatternLabel} / 管選択 ${tubeModeLabel} / 艦長許可 ${fireAuthorizationLabel} / ${formatTubeGeometrySummary(
+    ? `報告: ${torpedoSpec.label} / ${selectedFire.label}。${selectedFire.detail} / 発射形式 ${firePatternLabel}${
+        state.torpedoSequence.salvoSpreadDeg && plannedSalvoShotCount() > 1
+          ? ` / 散開 ${state.torpedoSequence.salvoSpreadDeg.toFixed(1)}°`
+          : ""
+      } / 管選択 ${tubeModeLabel} / 艦長許可 ${fireAuthorizationLabel} / ${formatTubeGeometrySummary(
         state.torpedoSequence.selectedTubeId
       )}${
         state.tdc.parallaxBearing !== null && state.tdc.parallaxRange !== null
           ? ` / 視差補正 ${formatHeading(state.tdc.parallaxBearing)} ${Math.round(state.tdc.parallaxRange)}m`
+          : ""
+      }${
+        state.torpedoSequence.salvoSpreadDeg && plannedSalvoShotCount() > 1
+          ? ` / ${describeSalvoSpread(
+              {
+                totalSpreadDeg: state.torpedoSequence.salvoSpreadDeg
+              },
+              plannedSalvoShotCount(),
+              selectedShot?.contact,
+              selectedShot?.range ?? null
+            )}`
           : ""
       }${reloadQueueText ? ` / 再装填優先 ${reloadQueueText}` : ""}`
     : state.viewMode === "binocular" && binocularFocus
       ? `報告: 双眼鏡で ${contactLabel(binocularFocus)} を捕捉。方位 ${Math.round(
           normalizeAngle(bearing(sub, binocularFocus) - sub.heading)
         )}°。${torpedoSpec.label} を使用。標的選定 -> 方位同期 -> 距離同期 -> Speed/AOB採用 -> 諸元入力。`
+    : lastFireReport
+      ? `報告: ${lastFireReport.torpedoLabel}、${lastFireReport.targetLabel}へ ${lastFireReport.patternLabel}。管 ${lastFireReport.usedTubes.join(
+          ", "
+        )}、散開 ${lastFireReport.spreadDeg.toFixed(1)}°、${lastFireReport.spreadBasis}、先頭会敵 ${lastFireReport.interceptSeconds.toFixed(
+          1
+        )} 秒。${lastFireReport.usesTDC ? "TDC 解を使用。" : "簡易解を使用。"}`
     : bestShot
       ? `報告: ${torpedoSpec.label} で ${playerContactLabel(bestShot.contact)} に対し進角 ${formatSigned(
           bestShot.gyroAngle
@@ -7136,6 +7205,12 @@ function updateHud() {
       : state.battlePhase === BATTLE_PHASES.submergedCombat
       ? `${loopMeta.label}。${loopMeta.torpedo}`
       : torpedoReportDetailNode.textContent;
+
+  if (lastFireReport && state.torpedoSequence.stage === TORPEDO_SEQUENCE.fired) {
+    captainReportNode.textContent = `${state.command.captainOrder} / 優先度 ${state.command.priorityLabel} / ${lastFireReport.patternLabel} 散開 ${lastFireReport.spreadDeg.toFixed(
+      1
+    )}° / 管 ${lastFireReport.usedTubes.join(", ")} / 先頭会敵 ${lastFireReport.interceptSeconds.toFixed(1)}s`;
+  }
 
   const escapeBearing = normalizeAngle(bearing(sub, state.escapeZone) - sub.heading);
   const trainingTarget = state.contacts.find(
@@ -7918,6 +7993,7 @@ function fireTorpedo() {
     return;
   }
 
+  const spreadMeta = computeSalvoSpread(resolvedSolution, target.contact, state.torpedoSequence);
   const usedTubes = [];
   firePlan.forEach((entry) => {
     if (!entry.tube) return;
@@ -7954,6 +8030,18 @@ function fireTorpedo() {
   state.torpedoSequence.stage = TORPEDO_SEQUENCE.fired;
   state.torpedoSequence.lastFiredTargetId = target.contact.id;
   state.torpedoSequence.lastFiredTubeId = firePlan[firePlan.length - 1]?.tube?.id || state.torpedoSequence.selectedTubeId;
+  state.torpedoSequence.lastFireReport = {
+    patternLabel: getCaptainFirePatternLabel(),
+    shotCount: firePlan.length,
+    usedTubes: [...usedTubes],
+    spreadDeg: firePlan.length > 1 ? spreadMeta.totalSpreadDeg : 0,
+    spreadBasis: firePlan.length > 1 ? spreadMeta.spreadBasis : "単射",
+    targetLabel: contactLabel(target.contact),
+    torpedoLabel: torpedo.label,
+    interceptSeconds: firePlan[0]?.interceptCountdown ?? 0,
+    usesTDC,
+    firedAt: state.time
+  };
   state.torpedoSequence.tubeReady = false;
   state.torpedoSequence.captainFireAuthorized = false;
   state.torpedoSequence.postFireRemaining = Math.max(
@@ -7969,12 +8057,16 @@ function fireTorpedo() {
     captainOrder: `艦長命令: ${contactLabel(target.contact)}へ雷撃`,
     priorityLabel: "緊急",
     priorityTone: "critical",
-    torpedo: `${getCaptainFirePatternLabel()} / 管 ${usedTubes.join(", ")} / 進角 ${formatSigned(Math.round(leadGyro))}°${usesTDC ? " (TDC)" : ""}、発射済み`,
+    torpedo: `${getCaptainFirePatternLabel()} / 管 ${usedTubes.join(", ")} / ${
+      firePlan.length > 1 ? `散開 ${spreadMeta.totalSpreadDeg.toFixed(1)}° / ` : ""
+    }進角 ${formatSigned(Math.round(leadGyro))}°${usesTDC ? " (TDC)" : ""}、発射済み`,
     sonar: "命中音と護衛反応を監視",
     navigation: "回避運動準備"
   });
   addLog(
-    `雷撃。${torpedo.label}、${getCaptainFirePatternLabel()}、管 ${usedTubes.join(", ")} から ${contactLabel(target.contact)} へ進角 ${formatSigned(
+    `雷撃。${torpedo.label}、${getCaptainFirePatternLabel()}、管 ${usedTubes.join(", ")} から ${contactLabel(target.contact)} へ${
+      firePlan.length > 1 ? ` 散開 ${spreadMeta.totalSpreadDeg.toFixed(1)}°、${spreadMeta.spreadBasis}、` : " "
+    }進角 ${formatSigned(
       leadGyro
     )}°、先頭会敵 ${firePlan[0].interceptCountdown.toFixed(1)} 秒。`
   );
