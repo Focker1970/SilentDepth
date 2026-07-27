@@ -5908,6 +5908,10 @@ function updateButtons() {
     const selected = state.torpedoSequence.selectedTubeId === button.dataset.tubeId;
     setButtonState(button, "active", manualMode && selected);
     setButtonState(button, "dim", !manualMode || !tube?.loaded || tubeMeta.cooling);
+    setButtonState(button, "tube-ready", Boolean(tube?.loaded) && !tubeMeta.loading && !tubeMeta.processing && !tubeMeta.cooling);
+    setButtonState(button, "tube-loading", tubeMeta.loading || tubeMeta.processing);
+    setButtonState(button, "tube-cooling", tubeMeta.cooling);
+    setButtonState(button, "tube-empty", Boolean(tube) && !tube.loaded && !tubeMeta.cooling && !tubeMeta.loading && !tubeMeta.processing);
     button.disabled = !manualMode;
     button.textContent = tube ? `${tube.label}${tubeMeta.cooling ? ` ${Math.ceil(tube.cooldownRemaining)}s` : ""}` : button.textContent;
     button.title = !manualMode
@@ -6382,6 +6386,9 @@ function prepareTorpedoTube() {
     setStatus(`発射管 ${tube.label} は ${tube.cooldownReason || "再整列"} 中。残り ${tube.cooldownRemaining.toFixed(1)} 秒。`, "warning");
     return;
   }
+  if (seq.selectedTubeId !== tube.id) {
+    addLog(`雷撃席: 再装填優先に従い、発射管 ${tube.label} を自動選定。`);
+  }
   seq.selectedTubeId = tube.id;
   syncTDCLaunchGeometry(seq.selectedTubeId);
   syncPlannedTubeState(seq, { preserveManual: seq.tubeSelectMode === "manual" });
@@ -6408,7 +6415,11 @@ function prepareTorpedoTube() {
       !tube.loaded ? "再装填後に " : ""
     }${surfaced ? "浮上射法。" : "潜航射法で注水・均圧を実施。"}`
   );
-  setStatus("発射管準備を開始。内部処理の完了を待つ。", "warning");
+  const reloadQueueText = reloadPrioritySummary(shot.contact, sub);
+  setStatus(
+    `${tube.label} を${!tube.loaded ? "再装填優先で" : "自動選定して"}発射管準備を開始。${reloadQueueText ? ` 優先順 ${reloadQueueText}` : ""}`,
+    "warning"
+  );
 }
 
 function updateTorpedoPreparation(deltaTime) {
